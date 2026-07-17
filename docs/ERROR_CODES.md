@@ -1,5 +1,15 @@
 # Error Code Catalog
 
+## Palette protocol errors
+
+Returned by the message dispatcher to the palette page, which displays them on
+its connection-status line.
+
+| Code | Meaning |
+|---|---|
+| `INVALID_PALETTE_REQUEST` | Request was rejected: malformed JSON, wrong protocol version, bad request id, disallowed action, or bad payload |
+| `INTERNAL_ERROR` | The add-in hit an unexpected failure while handling the request; the palette receives this instead of silence |
+
 ## Blocking errors
 
 | Code | Meaning |

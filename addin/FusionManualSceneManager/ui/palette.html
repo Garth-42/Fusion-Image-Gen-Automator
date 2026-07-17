@@ -1,3 +1,153 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="styles.css"><title>Fusion Manual Scene Manager</title></head>
-<body><main><h1>Fusion Manual Scene Manager</h1><p class="notice">Use a dedicated documentation assembly. This add-in never saves your Fusion document automatically.</p><section><h2>Project</h2><p id="connection-status" aria-live="polite">Connecting to add-in…</p></section><section><h2>Scenes</h2><p>The scene-authoring workflow will appear here after project initialization.</p></section></main><script src="app.js"></script></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fusion Manual Scene Manager</title>
+<!--
+  This document is deliberately self-contained: no linked stylesheets, no
+  external scripts. The palette host has shipped configurations in which the
+  HTML document renders while sibling-file subresources silently fail to load,
+  which froze the page on its static connecting text with no error anywhere.
+  Keeping every asset inline removes that failure mode: if this page is
+  visible, its script ran.
+-->
+<style>
+  :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { margin: 0; }
+  main { padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  h2 { font-size: 14px; }
+  .notice { border-left: 3px solid #d97706; padding-left: 10px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fusion Manual Scene Manager</h1>
+  <p class="notice">Use a dedicated documentation assembly. This add-in never saves your Fusion document automatically.</p>
+  <section>
+    <h2>Project</h2>
+    <p id="connection-status" aria-live="polite">Connecting to add-in…</p>
+  </section>
+  <section>
+    <h2>Scenes</h2>
+    <p>The scene-authoring workflow will appear here after project initialization.</p>
+  </section>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var status = document.getElementById("connection-status");
+
+  // The page's whole job during startup is to replace the connecting message,
+  // so a script error must land in that message too instead of stalling it.
+  window.onerror = function (message) {
+    status.textContent = "Palette script error: " + message;
+  };
+
+  // One fixed id is enough while the handshake ping is the only request; the
+  // add-in echoes it back and handleResponse uses it to ignore unrelated data.
+  var REQUEST_ID = "00000000-0000-4000-8000-000000000001";
+  var RETRY_INTERVAL_MS = 250;
+  var MAX_ATTEMPTS = 40;
+  var attempts = 0;
+  var settled = false;
+  var retryTimer = null;
+
+  function stopRetrying() {
+    if (retryTimer !== null) {
+      window.clearInterval(retryTimer);
+      retryTimer = null;
+    }
+  }
+
+  function settle(text) {
+    settled = true;
+    stopRetrying();
+    status.textContent = text;
+  }
+
+  // Interpret one raw JSON response string produced by the Python dispatcher.
+  // Error responses are shown even when their request id does not match ours
+  // (the dispatcher cannot echo the id of a request it could not parse), and
+  // retrying an identical request cannot fix one the add-in already rejected.
+  function handleResponse(raw) {
+    if (settled || !raw) { return; }
+    var response;
+    try {
+      response = JSON.parse(raw);
+    } catch (error) {
+      return;
+    }
+    if (!response) { return; }
+    if (response.request_id === REQUEST_ID && response.ok) {
+      settle("Add-in connected.");
+    } else if (response.ok === false && response.error) {
+      settle("Add-in connection error: " + response.error.message);
+    }
+  }
+
+  function sendPing() {
+    var request = {
+      protocol_version: 1,
+      request_id: REQUEST_ID,
+      action: "system.ping",
+      payload: {}
+    };
+    var result;
+    try {
+      result = adsk.fusionSendData("fmsm.request", JSON.stringify(request));
+    } catch (error) {
+      return; // adsk is not injected yet; the next attempt will retry.
+    }
+    if (result && typeof result.then === "function") {
+      // Current (Qt) palette browser: the add-in's returnData resolves the
+      // promise. Rejections are swallowed; the retry loop is the recovery.
+      result.then(handleResponse, function () {});
+    } else if (result) {
+      // Old (CEF) palette browser: returnData comes back synchronously.
+      handleResponse(result);
+    }
+  }
+
+  function attemptConnection() {
+    if (settled) {
+      stopRetrying();
+      return;
+    }
+    if (attempts >= MAX_ATTEMPTS) {
+      settle(
+        "Add-in did not respond after " + (MAX_ATTEMPTS * RETRY_INTERVAL_MS) / 1000 + " seconds. " +
+        "Stop and rerun it from Utilities > Add-Ins > Scripts and Add-Ins, " +
+        "then check Fusion's Text Commands window for FMSM messages."
+      );
+      return;
+    }
+    attempts += 1;
+    // The live counter doubles as a diagnostic: a frozen "Connecting" line
+    // means this script never ran, while a counting one means the add-in is
+    // not answering.
+    status.textContent = "Connecting to add-in… (attempt " + attempts + " of " + MAX_ATTEMPTS + ")";
+    sendPing();
+  }
+
+  // Python-initiated pushes arrive here (none are sent today). The handler
+  // must return a non-empty string; Fusion treats an empty return as an error.
+  window.fusionJavaScriptHandler = {
+    handle: function (action, data) {
+      if (action === "fmsm.response") { handleResponse(data); }
+      return "OK";
+    }
+  };
+
+  // The page can load before the add-in has attached its event handler, and
+  // adsk can be injected after the first script tick, so a single ping is not
+  // enough: repeat the idempotent ping until an answer arrives or the retry
+  // budget is spent.
+  attemptConnection();
+  retryTimer = window.setInterval(attemptConnection, RETRY_INTERVAL_MS);
+}());
+</script>
+</body>
+</html>
