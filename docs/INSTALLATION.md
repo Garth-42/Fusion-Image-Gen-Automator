@@ -37,4 +37,4 @@ Then close and reopen the dialog. If the add-in is listed but fails after clicki
 
 ## Initial behavior
 
-This first committed slice provides the add-in manifest, a dockable local palette, a versioned ping protocol, vendored YAML support, and a pure-Python persistence foundation. It deliberately does not yet expose project initialization, CAD-state capture, scene CRUD, or rendering controls; those follow the implementation sequence in `05_IMPLEMENTATION_PLAN.md`.
+This implementation provides the add-in manifest, a dockable local palette, project initialization/open, stable occurrence/component UUID management, vendored YAML support, and a pure-Python persistence foundation. It deliberately does not yet expose CAD-state capture, scene CRUD, state restoration, or rendering controls; those follow the implementation sequence in `05_IMPLEMENTATION_PLAN.md`.

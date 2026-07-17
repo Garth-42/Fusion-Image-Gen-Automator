@@ -32,3 +32,15 @@ class FusionEnvironmentPort(object):
     def write_project_id(self, project_id):
         """Persist the project UUID on the active document's attributes."""
         raise NotImplementedError
+
+    def identity_records(self):
+        """Return transient handles and diagnostic data for managed entities."""
+        raise NotImplementedError
+
+    def write_occurrence_id(self, occurrence_handle, occurrence_id):
+        """Write a UUID attribute to one managed occurrence."""
+        raise NotImplementedError
+
+    def write_component_id(self, component_handle, component_id):
+        """Write a UUID attribute to one managed component."""
+        raise NotImplementedError

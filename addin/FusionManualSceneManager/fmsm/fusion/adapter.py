@@ -7,6 +7,8 @@ from fmsm.application.ports import FusionEnvironmentPort
 
 ATTRIBUTE_GROUP = "FMSM"
 PROJECT_ID_ATTRIBUTE = "project_id"
+OCCURRENCE_ID_ATTRIBUTE = "occurrence_id"
+COMPONENT_ID_ATTRIBUTE = "component_id"
 DIALOG_TITLE = "Fusion Manual Scene Manager"
 
 
@@ -64,3 +66,40 @@ class FusionEnvironment(FusionEnvironmentPort):
 
     def write_project_id(self, project_id):
         self._document().attributes.add(ATTRIBUTE_GROUP, PROJECT_ID_ATTRIBUTE, project_id)
+
+    def identity_records(self):
+        """Return root-context occurrence/component identity data.
+
+        Fusion entity objects are kept only as transient handles used by this
+        process.  Persistent identity is always the UUID in the FMSM attribute.
+        """
+        design = self._app().activeProduct
+        if design is None or not hasattr(design, "rootComponent"):
+            raise RuntimeError("The active document does not contain a Fusion design.")
+        records = []
+        for occurrence in design.rootComponent.allOccurrences:
+            component = occurrence.component
+            records.append({
+                "occurrence_handle": occurrence,
+                "component_handle": component,
+                "component_key": component.entityToken,
+                "occurrence_id": self._attribute_value(occurrence, OCCURRENCE_ID_ATTRIBUTE),
+                "component_id": self._attribute_value(component, COMPONENT_ID_ATTRIBUTE),
+                "label": occurrence.name,
+                "component_label": component.name,
+                "part_number": component.partNumber,
+            })
+        return records
+
+    @staticmethod
+    def _attribute_value(entity, name):
+        attribute = entity.attributes.itemByName(ATTRIBUTE_GROUP, name)
+        return attribute.value if attribute is not None else None
+
+    @staticmethod
+    def write_occurrence_id(occurrence_handle, occurrence_id):
+        occurrence_handle.attributes.add(ATTRIBUTE_GROUP, OCCURRENCE_ID_ATTRIBUTE, occurrence_id)
+
+    @staticmethod
+    def write_component_id(component_handle, component_id):
+        component_handle.attributes.add(ATTRIBUTE_GROUP, COMPONENT_ID_ATTRIBUTE, component_id)

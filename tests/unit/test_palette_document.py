@@ -58,6 +58,15 @@ def test_document_contains_the_project_workflow_controls():
         assert action in html
 
 
+def test_document_contains_identity_management_controls():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    for element_id in ("identity-panel", "ensure-ids", "repair-ids"):
+        assert 'id="%s"' % element_id in html
+    for action in ("identity.status", "identity.ensure_ids", "identity.repair_duplicates"):
+        assert action in html
+
+
 def test_controller_url_points_at_the_document(monkeypatch):
     controller_module = _palette_controller(monkeypatch)
 

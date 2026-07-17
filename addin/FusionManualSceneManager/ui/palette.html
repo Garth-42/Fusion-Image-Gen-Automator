@@ -54,6 +54,13 @@
     <p id="scene-list-status">The scene-authoring workflow appears after project initialization.</p>
     <ul id="scene-list" hidden></ul>
   </section>
+  <section id="identity-panel" hidden>
+    <h2>Stable IDs</h2>
+    <p id="identity-status">Checking managed occurrence and component IDs…</p>
+    <button id="ensure-ids" type="button">Ensure IDs</button>
+    <button id="repair-ids" type="button">Repair Duplicate IDs</button>
+    <ul id="identity-details" class="warning-list"></ul>
+  </section>
 </main>
 <script>
 (function () {
@@ -72,7 +79,12 @@
     feedback: document.getElementById("project-feedback"),
     warnings: document.getElementById("project-warnings"),
     sceneStatus: document.getElementById("scene-list-status"),
-    sceneList: document.getElementById("scene-list")
+    sceneList: document.getElementById("scene-list"),
+    identityPanel: document.getElementById("identity-panel"),
+    identityStatus: document.getElementById("identity-status"),
+    ensureIds: document.getElementById("ensure-ids"),
+    repairIds: document.getElementById("repair-ids"),
+    identityDetails: document.getElementById("identity-details")
   };
 
   // The page's whole job during startup is to replace the connecting message,
@@ -233,6 +245,8 @@
     elements.initialize.disabled = busy;
     elements.open.disabled = busy;
     elements.refresh.disabled = busy;
+    elements.ensureIds.disabled = busy;
+    elements.repairIds.disabled = busy;
   }
 
   // ---- rendering -------------------------------------------------------
@@ -289,6 +303,40 @@
     }
     renderWarnings(result.warnings);
     renderScenes(result.project);
+    if (result.document) {
+      requestIdentityStatus();
+    } else {
+      elements.identityPanel.hidden = true;
+    }
+  }
+
+  function renderIdentity(result) {
+    var missing = result.missing.occurrences.length + result.missing.components.length;
+    var duplicates = result.duplicates.occurrences.length + result.duplicates.components.length;
+    clearChildren(elements.identityDetails);
+    elements.identityPanel.hidden = false;
+    if (duplicates) {
+      elements.identityStatus.textContent = "Blocking duplicate IDs found. Repair them before scene capture, apply, or render.";
+    } else if (missing) {
+      elements.identityStatus.textContent = "Some managed entities need IDs. Use Ensure IDs before creating a scene.";
+    } else {
+      elements.identityStatus.textContent = result.occurrences + " occurrence(s) and " + result.components + " component(s) have unique stable IDs.";
+    }
+    result.duplicates.occurrences.forEach(function (entry) {
+      var item = document.createElement("li");
+      item.textContent = "Duplicate occurrence ID: " + entry.labels.join(", ");
+      elements.identityDetails.appendChild(item);
+    });
+    result.duplicates.components.forEach(function (entry) {
+      var item = document.createElement("li");
+      item.textContent = "Duplicate component ID: " + entry.labels.join(", ");
+      elements.identityDetails.appendChild(item);
+    });
+    if (missing) {
+      var missingItem = document.createElement("li");
+      missingItem.textContent = missing + " entity ID(s) are missing or invalid.";
+      elements.identityDetails.appendChild(missingItem);
+    }
   }
 
   function describeError(response) {
@@ -305,6 +353,17 @@
         elements.feedback.textContent = describeError(response);
       }
     }, "Checking project association…");
+  }
+
+  function requestIdentityStatus() {
+    sendRequest("identity.status", {}, function (response) {
+      if (response.ok) {
+        renderIdentity(response.result);
+      } else {
+        elements.identityPanel.hidden = false;
+        elements.identityStatus.textContent = describeError(response);
+      }
+    }, "Checking stable IDs…");
   }
 
   function handleMutationResponse(response) {
@@ -339,6 +398,28 @@
   });
 
   elements.refresh.addEventListener("click", requestStatus);
+
+  elements.ensureIds.addEventListener("click", function () {
+    sendRequest("identity.ensure_ids", {}, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Assigned " + response.result.assigned.occurrences + " occurrence ID(s) and " + response.result.assigned.components + " component ID(s).";
+        renderIdentity(response.result);
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Assigning stable IDs to managed entities…");
+  });
+
+  elements.repairIds.addEventListener("click", function () {
+    sendRequest("identity.repair_duplicates", {}, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Repaired " + response.result.repaired.occurrences + " occurrence ID(s) and " + response.result.repaired.components + " component ID(s). Review any existing scenes before using them.";
+        renderIdentity(response.result);
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Repairing duplicate IDs…");
+  });
 
   // ---- startup ---------------------------------------------------------
 
