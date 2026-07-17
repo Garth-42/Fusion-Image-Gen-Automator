@@ -74,6 +74,7 @@ def test_palette_subscribes_before_making_document_visible(monkeypatch):
     controller.start()
 
     assert palettes.arguments[3] is False
+    assert palettes.arguments[2] == "file:///add-in-root/ui/palette.html"
     assert palette.incomingFromHTML.handlers
     assert palette.closed.handlers
     assert palette.isVisible is True
