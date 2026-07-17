@@ -1,0 +1,16 @@
+schema_version: 1
+project:
+  id: 0fbb1ed7-2e82-4e61-a5f8-83a2ed41e9db
+  title: Printer E-Box Assembly Guide
+  source_document:
+    data_file_id: urn:adsk.wipprod:dm.lineage:example-document
+    name: Printer E-Box Documentation Assembly
+    role: documentation_assembly
+  render_defaults:
+    width_px: 2400
+    height_px: 1600
+    transparent_background: true
+    anti_alias: true
+  scenes:
+    - scene_id: 78b36cd7-532e-4d82-b8d7-b04ccbfa73ae
+      file: scenes/install-left-din-rail__78b36cd7.yaml
