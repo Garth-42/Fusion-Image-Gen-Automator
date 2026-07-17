@@ -17,7 +17,10 @@ def _request(action, payload=None):
 
 
 def test_project_actions_are_allowed():
-    assert {"system.ping", "project.status", "project.initialize", "project.open"} == set(ALLOWED_ACTIONS)
+    assert {
+        "system.ping", "project.status", "project.initialize", "project.open",
+        "identity.status", "identity.ensure_ids", "identity.repair_duplicates",
+    } == set(ALLOWED_ACTIONS)
 
 
 def test_registered_handler_receives_payload_and_answers():

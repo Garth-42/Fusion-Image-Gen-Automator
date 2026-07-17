@@ -10,6 +10,9 @@ ALLOWED_ACTIONS = frozenset([
     "project.status",
     "project.initialize",
     "project.open",
+    "identity.status",
+    "identity.ensure_ids",
+    "identity.repair_duplicates",
 ])
 # Stamped on error responses to requests whose own id could not be parsed.
 NULL_REQUEST_ID = "00000000-0000-0000-0000-000000000000"

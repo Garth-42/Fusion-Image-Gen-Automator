@@ -32,3 +32,35 @@ class FusionEnvironmentPort(object):
     def write_project_id(self, project_id):
         """Persist the project UUID on the active document's attributes."""
         raise NotImplementedError
+
+    def identity_records(self):
+        """Return transient handles and diagnostic data for managed entities."""
+        raise NotImplementedError
+
+    def write_occurrence_id(self, occurrence_handle, occurrence_id):
+        """Write a UUID attribute to one managed occurrence."""
+        raise NotImplementedError
+
+    def write_component_id(self, component_handle, component_id):
+        """Write a UUID attribute to one managed component."""
+        raise NotImplementedError
+
+    def capture_session_state(self):
+        """Capture camera and managed assembly state for later restoration."""
+        raise NotImplementedError
+
+    def validate_scene_references(self, scene):
+        """Return blocking reference diagnostics without mutating Fusion."""
+        raise NotImplementedError
+
+    def apply_scene_state(self, scene):
+        """Apply a previously validated scene state on the Fusion UI thread."""
+        raise NotImplementedError
+
+    def restore_session_state(self, snapshot):
+        """Restore a snapshot captured by :meth:`capture_session_state`."""
+        raise NotImplementedError
+
+    def refresh_viewport(self):
+        """Refresh Fusion's viewport after applying or restoring state."""
+        raise NotImplementedError

@@ -6,6 +6,7 @@ import json
 import adsk.core
 
 from fmsm.application.services import ProjectService
+from fmsm.application.identity_service import IdentityService
 from fmsm.fusion.adapter import FusionEnvironment
 from fmsm.infrastructure.settings_store import SettingsStore
 from fmsm.messaging.dispatcher import MessageDispatcher
@@ -59,8 +60,12 @@ class _IncomingHtmlHandler(adsk.core.HTMLEventHandler):
 class PaletteController(object):
     def __init__(self):
         self.palette = None
-        service = ProjectService(FusionEnvironment(), SettingsStore())
-        self.dispatcher = MessageDispatcher(service.handlers())
+        fusion = FusionEnvironment()
+        project_service = ProjectService(fusion, SettingsStore())
+        identity_service = IdentityService(fusion)
+        handlers = project_service.handlers()
+        handlers.update(identity_service.handlers())
+        self.dispatcher = MessageDispatcher(handlers)
         # Fusion only holds weak references to event handlers; anything not
         # retained here is garbage collected and its events silently stop.
         self._handlers = []
