@@ -85,8 +85,11 @@ def test_palette_subscribes_before_making_document_visible(monkeypatch):
         "action": "system.ping",
         "payload": {},
     })
-    args = type("Args", (), {"data": request})()
+    args = type("Args", (), {"data": request, "returnData": None})()
     palette.incomingFromHTML.handlers[0].notify(args)
 
-    assert palette.sent[0][0] == "fmsm.response"
-    assert json.loads(palette.sent[0][1])["result"] == {"message": "pong"}
+    # The response travels back through ``returnData`` (the return value of the
+    # JavaScript ``fusionSendData`` call), not ``sendInfoToHTML``, so it is
+    # delivered even while the old browser blocks the palette's JS thread.
+    assert palette.sent == []
+    assert json.loads(args.returnData)["result"] == {"message": "pong"}

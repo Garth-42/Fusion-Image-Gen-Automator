@@ -31,8 +31,15 @@ class _IncomingHtmlHandler(adsk.core.HTMLEventHandler):
         self._controller = controller
 
     def notify(self, args):
+        # Respond through ``returnData`` rather than ``sendInfoToHTML``. On the
+        # old (CEF) browser ``adsk.fusionSendData`` is synchronous, so the
+        # palette's JavaScript thread is blocked inside that call while this
+        # handler runs; a ``sendInfoToHTML`` callback issued here can never be
+        # delivered and the palette hangs on its connecting state. ``returnData``
+        # is handed straight back as the return value of ``fusionSendData`` and
+        # works on both the old and new browsers.
         response = self._controller.dispatcher.dispatch(args.data)
-        self._controller.palette.sendInfoToHTML("fmsm.response", json.dumps(response))
+        args.returnData = json.dumps(response)
 
 
 class _ClosedHandler(adsk.core.UserInterfaceGeneralEventHandler):
