@@ -2,8 +2,46 @@ import json
 import uuid
 
 import fmsm.messaging.dispatcher as dispatcher_module
+from fmsm.application.errors import ServiceError
 from fmsm.messaging.dispatcher import MessageDispatcher
-from fmsm.messaging.protocol import NULL_REQUEST_ID
+from fmsm.messaging.protocol import ALLOWED_ACTIONS, NULL_REQUEST_ID
+
+
+def _request(action, payload=None):
+    return json.dumps({
+        "protocol_version": 1,
+        "request_id": str(uuid.uuid4()),
+        "action": action,
+        "payload": payload if payload is not None else {},
+    })
+
+
+def test_project_actions_are_allowed():
+    assert {"system.ping", "project.status", "project.initialize", "project.open"} == set(ALLOWED_ACTIONS)
+
+
+def test_registered_handler_receives_payload_and_answers():
+    dispatcher = MessageDispatcher({"project.status": lambda payload: {"echo": payload}})
+    response = dispatcher.dispatch(_request("project.status", {"a": 1}))
+    assert response["ok"] is True
+    assert response["result"] == {"echo": {"a": 1}}
+
+
+def test_service_error_becomes_a_coded_error_response():
+    def fail(payload):
+        raise ServiceError("NO_ACTIVE_FUSION_DESIGN", "Open the assembly first.", {"hint": "open"})
+
+    dispatcher = MessageDispatcher({"project.open": fail})
+    response = dispatcher.dispatch(_request("project.open"))
+    assert response["ok"] is False
+    assert response["error"]["code"] == "NO_ACTIVE_FUSION_DESIGN"
+    assert response["error"]["details"] == {"hint": "open"}
+
+
+def test_allowed_action_without_handler_is_rejected():
+    response = MessageDispatcher().dispatch(_request("project.status"))
+    assert response["ok"] is False
+    assert response["error"]["code"] == "INVALID_PALETTE_REQUEST"
 
 
 def test_ping_round_trip():

@@ -17,7 +17,10 @@ its connection-status line.
 | `NO_ACTIVE_FUSION_DESIGN` | Active document is not a supported Fusion design |
 | `PROJECT_NOT_ASSOCIATED` | Active document has no project association |
 | `PROJECT_ROOT_UNRESOLVED` | Local path mapping is missing or invalid |
+| `PROJECT_ROOT_NOT_EMPTY` | Selected folder already contains a manual project |
+| `PROJECT_TITLE_INVALID` | Project title is empty or longer than 200 characters |
 | `PROJECT_ID_MISMATCH` | Document, local mapping, and manifest disagree |
+| `MANIFEST_INVALID` | manual.yaml violates the schema-version-1 structure |
 | `SCHEMA_VERSION_MISSING` | YAML lacks schema version |
 | `SCHEMA_VERSION_UNSUPPORTED` | YAML version is newer or otherwise unsupported |
 | `YAML_PARSE_FAILED` | YAML cannot be safely parsed |

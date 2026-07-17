@@ -49,6 +49,15 @@ def test_document_contains_the_handshake_and_its_failure_states():
     assert "Add-in did not respond" in html
 
 
+def test_document_contains_the_project_workflow_controls():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    for element_id in ("project-title", "initialize-project", "open-project", "refresh-status", "scene-list"):
+        assert 'id="%s"' % element_id in html
+    for action in ("project.status", "project.initialize", "project.open"):
+        assert action in html
+
+
 def test_controller_url_points_at_the_document(monkeypatch):
     controller_module = _palette_controller(monkeypatch)
 
