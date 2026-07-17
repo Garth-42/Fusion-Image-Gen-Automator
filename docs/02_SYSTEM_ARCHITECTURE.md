@@ -201,9 +201,7 @@ addin/
     │       ├── dispatcher.py
     │       └── protocol.py
     ├── ui/
-    │   ├── palette.html
-    │   ├── app.js
-    │   ├── styles.css
+    │   ├── palette.html   (self-contained: styles and script are inline)
     │   └── icons/
     ├── vendor/
     │   └── yaml/

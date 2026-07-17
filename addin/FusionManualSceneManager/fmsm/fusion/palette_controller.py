@@ -2,7 +2,6 @@
 from __future__ import absolute_import
 
 import json
-from pathlib import Path
 
 import adsk.core
 
@@ -10,6 +9,17 @@ from fmsm.messaging.dispatcher import MessageDispatcher
 
 PALETTE_ID = "fmsm_scene_manager_palette"
 PALETTE_NAME = "Fusion Manual Scene Manager"
+# ``Palettes.add`` documents exactly one local-file form: a path relative to
+# the add-in root. The hand-built absolute file:// URIs used previously loaded
+# the HTML document on some platforms while its subresources silently failed,
+# freezing the palette on its static connecting text.
+PALETTE_URL = "ui/palette.html"
+
+
+def _log(message):
+    app = adsk.core.Application.get()
+    if app is not None:
+        app.log("FMSM: %s" % message)
 
 
 def report_startup_failure(traceback_text):
@@ -38,25 +48,25 @@ class _IncomingHtmlHandler(adsk.core.HTMLEventHandler):
         # delivered and the palette hangs on its connecting state. ``returnData``
         # is handed straight back as the return value of ``fusionSendData`` and
         # works on both the old and new browsers.
+        self._controller.record_palette_message()
         response = self._controller.dispatcher.dispatch(args.data)
         args.returnData = json.dumps(response)
 
 
-class _ClosedHandler(adsk.core.UserInterfaceGeneralEventHandler):
-    def __init__(self, controller):
-        super(_ClosedHandler, self).__init__()
-        self._controller = controller
-
-    def notify(self, args):
-        self._controller.palette = None
-
-
 class PaletteController(object):
-    def __init__(self, addin_root):
-        self._addin_root = addin_root
+    def __init__(self):
         self.palette = None
         self.dispatcher = MessageDispatcher()
+        # Fusion only holds weak references to event handlers; anything not
+        # retained here is garbage collected and its events silently stop.
         self._handlers = []
+        self._saw_palette_message = False
+
+    def record_palette_message(self):
+        """Leave a one-time Text Commands breadcrumb when the handshake works."""
+        if not self._saw_palette_message:
+            self._saw_palette_message = True
+            _log("first palette message received; the page-to-add-in link works.")
 
     def start(self):
         app = adsk.core.Application.get()
@@ -65,30 +75,38 @@ class PaletteController(object):
         ui = app.userInterface
         if ui is None:
             raise RuntimeError("Fusion user interface is unavailable.")
-        self.palette = ui.palettes.itemById(PALETTE_ID)
-        if self.palette is None:
-            # ``file:///" + path`` produces an invalid four-slash URI on macOS
-            # because its absolute paths already start with ``/``.  The HTML
-            # itself can still be displayed there while relative assets (notably
-            # app.js) fail to load, leaving the static connecting message behind.
-            url = Path(self._addin_root, "ui", "palette.html").resolve().as_uri()
-            # Keep the document hidden until the event handlers below are
-            # installed.  Creating it visible lets its script send the one-time
-            # initial request before ``incomingFromHTML`` has a subscriber.
-            self.palette = ui.palettes.add(
-                PALETTE_ID, PALETTE_NAME, url, False, True, True, 460, 760
-            )
+        # Always build the palette from scratch. A palette left behind by an
+        # earlier run (a start that failed partway, or a stop that could not
+        # finish) still shows the page it loaded back then: stale markup whose
+        # script exhausted its retry budget long ago, which is indistinguishable
+        # from a hang. A fresh palette is the only state this code can vouch for.
+        stale = ui.palettes.itemById(PALETTE_ID)
+        if stale is not None:
+            _log("deleting a palette left over from an earlier run.")
+            stale.deleteMe()
+        # Create hidden so the event handler below is attached before the page
+        # can load and send its first request.
+        self.palette = ui.palettes.add(
+            PALETTE_ID, PALETTE_NAME, PALETTE_URL, False, True, True, 460, 760
+        )
         if self.palette is None:
             raise RuntimeError("Fusion did not create the FMSM palette.")
         incoming = _IncomingHtmlHandler(self)
-        closed = _ClosedHandler(self)
         self.palette.incomingFromHTML.add(incoming)
-        self.palette.closed.add(closed)
-        self._handlers.extend([incoming, closed])
+        self._handlers.append(incoming)
         self.palette.isVisible = True
+        _log("palette shown; waiting for the page's first ping.")
 
     def stop(self):
-        if self.palette is not None:
-            self.palette.deleteMe()
+        palette = self.palette
         self.palette = None
         self._handlers = []
+        if palette is None:
+            return
+        try:
+            palette.deleteMe()
+        except Exception:
+            # Fusion deletes palettes itself in some situations (for example on
+            # workspace switches); a second delete must not turn add-in stop
+            # into an error dialog.
+            _log("palette was already deleted by Fusion.")

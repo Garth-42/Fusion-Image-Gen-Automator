@@ -17,12 +17,20 @@ _controller = None
 def run(context):
     """Start the add-in and surface initialization failures to the Fusion user."""
     global _controller
+    controller = PaletteController()
     try:
-        _controller = PaletteController(ADDIN_ROOT)
-        _controller.start()
+        controller.start()
     except Exception:
-        _controller = None
+        # Tear down whatever the failed start managed to create. A palette that
+        # outlives its failed run would be picked up by the next start as a
+        # stale, unresponsive page.
+        try:
+            controller.stop()
+        except Exception:
+            pass
         report_startup_failure(traceback.format_exc())
+        return
+    _controller = controller
 
 
 def stop(context):

@@ -8,7 +8,6 @@ def _load_entry_point(monkeypatch):
     core_module = types.ModuleType("adsk.core")
     core_module.Application = type("Application", (), {"get": staticmethod(lambda: None)})
     core_module.HTMLEventHandler = object
-    core_module.UserInterfaceGeneralEventHandler = object
     adsk_module.core = core_module
     monkeypatch.setitem(sys.modules, "adsk", adsk_module)
     monkeypatch.setitem(sys.modules, "adsk.core", core_module)
