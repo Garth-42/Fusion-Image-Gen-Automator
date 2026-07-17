@@ -2,21 +2,10 @@
   "use strict";
   var status = document.getElementById("connection-status");
   var requestId = "00000000-0000-4000-8000-000000000001";
-  var attempts = 0;
-  var maximumAttempts = 20;
-  var retryDelayMilliseconds = 250;
 
   function send(action, payload) {
     var request = { protocol_version: 1, request_id: requestId, action: action, payload: payload || {} };
     adsk.fusionSendData("fmsm.request", JSON.stringify(request));
-  }
-
-  function pingAddin() {
-    attempts += 1;
-    send("system.ping", {});
-    if (attempts < maximumAttempts) {
-      window.setTimeout(pingAddin, retryDelayMilliseconds);
-    }
   }
 
   window.fusionJavaScriptHandler = { handle: function (action, data) {

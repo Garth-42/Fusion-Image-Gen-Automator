@@ -5,19 +5,33 @@ import types
 
 
 class _Event(object):
-    def __init__(self):
+    def __init__(self, lifecycle, name):
         self.handlers = []
+        self._lifecycle = lifecycle
+        self._name = name
 
     def add(self, handler):
         self.handlers.append(handler)
+        self._lifecycle.append(self._name)
 
 
 class _Palette(object):
     def __init__(self):
-        self.incomingFromHTML = _Event()
-        self.closed = _Event()
+        self.lifecycle = []
+        self.incomingFromHTML = _Event(self.lifecycle, "incoming")
+        self.closed = _Event(self.lifecycle, "closed")
         self.sent = []
-        self.isVisible = False
+        self._is_visible = False
+
+    @property
+    def isVisible(self):
+        return self._is_visible
+
+    @isVisible.setter
+    def isVisible(self, value):
+        self._is_visible = value
+        if value:
+            self.lifecycle.append("visible")
 
     def sendInfoToHTML(self, action, data):
         self.sent.append((action, data))
@@ -52,14 +66,18 @@ def _load_controller(monkeypatch, palette):
     return controller_module, palettes
 
 
-def test_palette_uses_supported_browser_and_answers_ping(monkeypatch):
+def test_palette_subscribes_before_making_document_visible(monkeypatch):
     palette = _Palette()
     controller_module, palettes = _load_controller(monkeypatch, palette)
     controller = controller_module.PaletteController("/add-in-root")
 
     controller.start()
 
-    assert palettes.arguments[-1] is True
+    assert palettes.arguments[3] is False
+    assert palette.incomingFromHTML.handlers
+    assert palette.closed.handlers
+    assert palette.isVisible is True
+    assert palette.lifecycle == ["incoming", "closed", "visible"]
     request = json.dumps({
         "protocol_version": 1,
         "request_id": "00000000-0000-4000-8000-000000000001",

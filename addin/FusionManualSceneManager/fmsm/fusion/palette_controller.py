@@ -61,12 +61,11 @@ class PaletteController(object):
         self.palette = ui.palettes.itemById(PALETTE_ID)
         if self.palette is None:
             url = "file:///" + os.path.join(self._addin_root, "ui", "palette.html").replace("\\", "/")
-            # The Chromium-based palette host provides the supported JavaScript
-            # bridge used by ``adsk.fusionSendData``.  Do not rely on Fusion's
-            # legacy-browser default here; without this flag the palette can be
-            # displayed while its initial handshake never reaches Python.
+            # Keep the document hidden until the event handlers below are
+            # installed.  Creating it visible lets its script send the one-time
+            # initial request before ``incomingFromHTML`` has a subscriber.
             self.palette = ui.palettes.add(
-                PALETTE_ID, PALETTE_NAME, url, True, True, True, 460, 760, True
+                PALETTE_ID, PALETTE_NAME, url, False, True, True, 460, 760
             )
         if self.palette is None:
             raise RuntimeError("Fusion did not create the FMSM palette.")
