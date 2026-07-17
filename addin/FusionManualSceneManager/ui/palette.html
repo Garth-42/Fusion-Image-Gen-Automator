@@ -19,6 +19,13 @@
   h1 { font-size: 18px; margin: 0 0 16px; }
   h2 { font-size: 14px; }
   .notice { border-left: 3px solid #d97706; padding-left: 10px; line-height: 1.4; }
+  label { display: block; font-size: 13px; margin: 8px 0 4px; }
+  input[type="text"] { box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit; }
+  button { font: inherit; padding: 6px 12px; margin: 8px 8px 0 0; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  .warning-list li { line-height: 1.4; }
+  #project-feedback:empty, #project-warnings:empty { display: none; }
+  #project-feedback { border-left: 3px solid #6b7280; padding-left: 10px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -28,30 +35,112 @@
   <section>
     <h2>Project</h2>
     <p id="connection-status" aria-live="polite">Connecting to add-in…</p>
+    <div id="project-panel" hidden>
+      <p id="document-line"></p>
+      <p id="project-summary"></p>
+      <div id="project-setup" hidden>
+        <label for="project-title">Project title</label>
+        <input id="project-title" type="text" maxlength="200" placeholder="e.g. Printer E-Box Assembly Guide">
+        <button id="initialize-project" type="button">Initialize Project…</button>
+        <button id="open-project" type="button">Open Project…</button>
+      </div>
+      <button id="refresh-status" type="button">Refresh</button>
+      <p id="project-feedback" aria-live="polite"></p>
+      <ul id="project-warnings" class="warning-list"></ul>
+    </div>
   </section>
   <section>
     <h2>Scenes</h2>
-    <p>The scene-authoring workflow will appear here after project initialization.</p>
+    <p id="scene-list-status">The scene-authoring workflow appears after project initialization.</p>
+    <ul id="scene-list" hidden></ul>
   </section>
 </main>
 <script>
 (function () {
   "use strict";
 
-  var status = document.getElementById("connection-status");
+  var connectionLine = document.getElementById("connection-status");
+  var elements = {
+    panel: document.getElementById("project-panel"),
+    documentLine: document.getElementById("document-line"),
+    summary: document.getElementById("project-summary"),
+    setup: document.getElementById("project-setup"),
+    title: document.getElementById("project-title"),
+    initialize: document.getElementById("initialize-project"),
+    open: document.getElementById("open-project"),
+    refresh: document.getElementById("refresh-status"),
+    feedback: document.getElementById("project-feedback"),
+    warnings: document.getElementById("project-warnings"),
+    sceneStatus: document.getElementById("scene-list-status"),
+    sceneList: document.getElementById("scene-list")
+  };
 
   // The page's whole job during startup is to replace the connecting message,
   // so a script error must land in that message too instead of stalling it.
   window.onerror = function (message) {
-    status.textContent = "Palette script error: " + message;
+    connectionLine.textContent = "Palette script error: " + message;
   };
 
-  // One fixed id is enough while the handshake ping is the only request; the
-  // add-in echoes it back and handleResponse uses it to ignore unrelated data.
-  var REQUEST_ID = "00000000-0000-4000-8000-000000000001";
+  // ---- transport -------------------------------------------------------
+
+  function transmit(action, payload, requestId) {
+    var request = {
+      protocol_version: 1,
+      request_id: requestId,
+      action: action,
+      payload: payload || {}
+    };
+    var result;
+    try {
+      result = adsk.fusionSendData("fmsm.request", JSON.stringify(request));
+    } catch (error) {
+      return false; // adsk is not injected yet; connect retries cover this.
+    }
+    if (result && typeof result.then === "function") {
+      // Current (Qt) palette browser: the add-in's returnData resolves the
+      // promise. Rejections are swallowed; retry/feedback is the recovery.
+      result.then(handleRaw, function () {});
+    } else if (result) {
+      // Old (CEF) palette browser: returnData comes back synchronously.
+      handleRaw(result);
+    }
+    return true;
+  }
+
+  function handleRaw(raw) {
+    if (!raw) { return; }
+    var response;
+    try {
+      response = JSON.parse(raw);
+    } catch (error) {
+      return;
+    }
+    if (!response) { return; }
+    if (!connected) {
+      handleHandshakeResponse(response);
+    } else {
+      handleRequestResponse(response);
+    }
+  }
+
+  // Python-initiated pushes arrive here (none are sent today). The handler
+  // must return a non-empty string; Fusion treats an empty return as an error.
+  window.fusionJavaScriptHandler = {
+    handle: function (action, data) {
+      if (action === "fmsm.response") { handleRaw(data); }
+      return "OK";
+    }
+  };
+
+  // ---- connection handshake --------------------------------------------
+
+  // One fixed id is enough for the handshake ping; project requests generate
+  // fresh ids below so responses cannot be attributed to the wrong request.
+  var PING_REQUEST_ID = "00000000-0000-4000-8000-000000000001";
   var RETRY_INTERVAL_MS = 250;
   var MAX_ATTEMPTS = 40;
   var attempts = 0;
+  var connected = false;
   var settled = false;
   var retryTimer = null;
 
@@ -62,52 +151,23 @@
     }
   }
 
-  function settle(text) {
+  function settleConnection(text) {
     settled = true;
     stopRetrying();
-    status.textContent = text;
+    connectionLine.textContent = text;
   }
 
-  // Interpret one raw JSON response string produced by the Python dispatcher.
-  // Error responses are shown even when their request id does not match ours
-  // (the dispatcher cannot echo the id of a request it could not parse), and
-  // retrying an identical request cannot fix one the add-in already rejected.
-  function handleResponse(raw) {
-    if (settled || !raw) { return; }
-    var response;
-    try {
-      response = JSON.parse(raw);
-    } catch (error) {
-      return;
-    }
-    if (!response) { return; }
-    if (response.request_id === REQUEST_ID && response.ok) {
-      settle("Add-in connected.");
+  // Error responses settle the handshake even when their request id does not
+  // match (the dispatcher cannot echo the id of a request it could not parse),
+  // because retrying an identical request cannot fix a rejected one.
+  function handleHandshakeResponse(response) {
+    if (settled) { return; }
+    if (response.request_id === PING_REQUEST_ID && response.ok) {
+      connected = true;
+      settleConnection("Add-in connected.");
+      requestStatus();
     } else if (response.ok === false && response.error) {
-      settle("Add-in connection error: " + response.error.message);
-    }
-  }
-
-  function sendPing() {
-    var request = {
-      protocol_version: 1,
-      request_id: REQUEST_ID,
-      action: "system.ping",
-      payload: {}
-    };
-    var result;
-    try {
-      result = adsk.fusionSendData("fmsm.request", JSON.stringify(request));
-    } catch (error) {
-      return; // adsk is not injected yet; the next attempt will retry.
-    }
-    if (result && typeof result.then === "function") {
-      // Current (Qt) palette browser: the add-in's returnData resolves the
-      // promise. Rejections are swallowed; the retry loop is the recovery.
-      result.then(handleResponse, function () {});
-    } else if (result) {
-      // Old (CEF) palette browser: returnData comes back synchronously.
-      handleResponse(result);
+      settleConnection("Add-in connection error: " + response.error.message);
     }
   }
 
@@ -117,7 +177,7 @@
       return;
     }
     if (attempts >= MAX_ATTEMPTS) {
-      settle(
+      settleConnection(
         "Add-in did not respond after " + (MAX_ATTEMPTS * RETRY_INTERVAL_MS) / 1000 + " seconds. " +
         "Stop and rerun it from Utilities > Add-Ins > Scripts and Add-Ins, " +
         "then check Fusion's Text Commands window for FMSM messages."
@@ -128,18 +188,159 @@
     // The live counter doubles as a diagnostic: a frozen "Connecting" line
     // means this script never ran, while a counting one means the add-in is
     // not answering.
-    status.textContent = "Connecting to add-in… (attempt " + attempts + " of " + MAX_ATTEMPTS + ")";
-    sendPing();
+    connectionLine.textContent = "Connecting to add-in… (attempt " + attempts + " of " + MAX_ATTEMPTS + ")";
+    transmit("system.ping", {}, PING_REQUEST_ID);
   }
 
-  // Python-initiated pushes arrive here (none are sent today). The handler
-  // must return a non-empty string; Fusion treats an empty return as an error.
-  window.fusionJavaScriptHandler = {
-    handle: function (action, data) {
-      if (action === "fmsm.response") { handleResponse(data); }
-      return "OK";
+  // ---- project requests ------------------------------------------------
+
+  // One request at a time mirrors the application layer's single operation
+  // lock; the buttons stay disabled until the active request settles.
+  var pendingRequest = null;
+
+  function newRequestId() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      var random = (Math.random() * 16) | 0;
+      var value = c === "x" ? random : (random & 0x3) | 0x8;
+      return value.toString(16);
+    });
+  }
+
+  function handleRequestResponse(response) {
+    if (pendingRequest === null) { return; }
+    // A response for a request the dispatcher could not parse carries the null
+    // id; with a single request in flight it can only belong to that request.
+    if (response.request_id !== pendingRequest.id && response.ok !== false) { return; }
+    var finish = pendingRequest.onSettled;
+    pendingRequest = null;
+    setBusy(false);
+    finish(response);
+  }
+
+  function sendRequest(action, payload, onSettled, busyText) {
+    if (pendingRequest !== null) { return; }
+    pendingRequest = { id: newRequestId(), onSettled: onSettled };
+    setBusy(true);
+    elements.feedback.textContent = busyText || "Working…";
+    if (!transmit(action, payload, pendingRequest.id)) {
+      pendingRequest = null;
+      setBusy(false);
+      elements.feedback.textContent = "The add-in connection was lost. Restart the add-in and reopen the palette.";
     }
-  };
+  }
+
+  function setBusy(busy) {
+    elements.initialize.disabled = busy;
+    elements.open.disabled = busy;
+    elements.refresh.disabled = busy;
+  }
+
+  // ---- rendering -------------------------------------------------------
+
+  function clearChildren(node) {
+    while (node.firstChild) { node.removeChild(node.firstChild); }
+  }
+
+  function renderWarnings(warnings) {
+    clearChildren(elements.warnings);
+    (warnings || []).forEach(function (warning) {
+      var item = document.createElement("li");
+      item.textContent = "Warning (" + warning.code + "): " + warning.message;
+      elements.warnings.appendChild(item);
+    });
+  }
+
+  function renderScenes(project) {
+    clearChildren(elements.sceneList);
+    if (!project) {
+      elements.sceneList.hidden = true;
+      elements.sceneStatus.textContent = "The scene-authoring workflow appears after project initialization.";
+      return;
+    }
+    if (project.scenes.length === 0) {
+      elements.sceneList.hidden = true;
+      elements.sceneStatus.textContent = "No scenes yet. Scene creation arrives with the capture milestone.";
+      return;
+    }
+    elements.sceneStatus.textContent = project.scenes.length + " scene(s) in manifest order:";
+    project.scenes.forEach(function (entry) {
+      var item = document.createElement("li");
+      item.textContent = entry.file;
+      elements.sceneList.appendChild(item);
+    });
+    elements.sceneList.hidden = false;
+  }
+
+  function renderState(result) {
+    elements.panel.hidden = false;
+    if (result.document) {
+      elements.documentLine.textContent = "Document: " + result.document.name;
+    } else {
+      elements.documentLine.textContent = "No document is open. Open the documentation assembly, then press Refresh.";
+    }
+    if (result.project) {
+      elements.summary.textContent = "Project: " + result.project.title + " — " + result.project.root;
+      elements.setup.hidden = true;
+    } else {
+      elements.summary.textContent = result.document
+        ? "No manual project is associated with this document yet."
+        : "";
+      elements.setup.hidden = !result.document;
+    }
+    renderWarnings(result.warnings);
+    renderScenes(result.project);
+  }
+
+  function describeError(response) {
+    return "Error (" + response.error.code + "): " + response.error.message;
+  }
+
+  function requestStatus() {
+    sendRequest("project.status", {}, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "";
+        renderState(response.result);
+      } else {
+        elements.panel.hidden = false;
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Checking project association…");
+  }
+
+  function handleMutationResponse(response) {
+    if (!response.ok) {
+      elements.feedback.textContent = describeError(response);
+      return;
+    }
+    if (response.result.cancelled) {
+      elements.feedback.textContent = "Cancelled.";
+      return;
+    }
+    elements.feedback.textContent = "";
+    renderState(response.result);
+  }
+
+  elements.initialize.addEventListener("click", function () {
+    sendRequest(
+      "project.initialize",
+      { title: elements.title.value },
+      handleMutationResponse,
+      "Waiting for the Fusion confirmation and folder dialogs…"
+    );
+  });
+
+  elements.open.addEventListener("click", function () {
+    sendRequest(
+      "project.open",
+      {},
+      handleMutationResponse,
+      "Waiting for the Fusion folder dialog…"
+    );
+  });
+
+  elements.refresh.addEventListener("click", requestStatus);
+
+  // ---- startup ---------------------------------------------------------
 
   // The page can load before the add-in has attached its event handler, and
   // adsk can be injected after the first script tick, so a single ping is not

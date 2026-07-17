@@ -5,7 +5,12 @@ import json
 import uuid
 
 PROTOCOL_VERSION = 1
-ALLOWED_ACTIONS = frozenset(["system.ping"])
+ALLOWED_ACTIONS = frozenset([
+    "system.ping",
+    "project.status",
+    "project.initialize",
+    "project.open",
+])
 # Stamped on error responses to requests whose own id could not be parsed.
 NULL_REQUEST_ID = "00000000-0000-0000-0000-000000000000"
 
