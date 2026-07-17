@@ -18,5 +18,8 @@
     }
     status.textContent = "Add-in connection error: " + response.error.message;
   }};
-  send("system.ping", {});
+  // A palette document can load before Python has attached incomingFromHTML.
+  // Retry the idempotent ping briefly so that startup ordering cannot leave the
+  // visible palette permanently stuck on its connecting state.
+  pingAddin();
 }());
