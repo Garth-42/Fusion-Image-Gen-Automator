@@ -1,0 +1,103 @@
+schema_version: 1
+scene:
+  id: 78b36cd7-532e-4d82-b8d7-b04ccbfa73ae
+  slug: install-left-din-rail
+  title: Install the left DIN rail
+  description: Shows the left DIN rail being installed on the enclosure backplate with four fasteners.
+  purpose: Make the rail orientation, mounting-hole locations, and fastener placement unambiguous.
+  instruction_markdown: |-
+    Position the DIN rail against the four mounting holes.
+
+    Install four **M5 x 10 socket-head screws** and tighten them evenly.
+
+    > **Orientation:** The raised edge of the rail faces toward the center of the enclosure.
+  status: draft
+  tags:
+    - mechanical
+    - din-rail
+    - backplate
+source:
+  document_data_file_id: urn:adsk.wipprod:dm.lineage:example-document
+  document_name: Printer E-Box Documentation Assembly
+  captured_at_utc: '2026-07-17T13:00:00Z'
+  fusion_version: null
+camera:
+  type: orthographic
+  eye_cm:
+    - 41.26
+    - -31.82
+    - 27.74
+  target_cm:
+    - 0.0
+    - 0.0
+    - 3.2
+  up_vector:
+    - 0.0
+    - 0.0
+    - 1.0
+  extents_cm:
+    width: 54.0
+    height: 36.0
+  perspective_angle_rad: null
+  is_fit_view: false
+assembly_state:
+  unlisted_occurrence_policy: hide_and_warn
+  occurrences:
+    - occurrence_id: 5ceae402-b6b4-4a27-88db-2a3b6b27d54f
+      label: Backplate:1
+      part_number: EBOX-BACKPLATE
+      visible: true
+      transform_matrix_cm:
+        - 1.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+    - occurrence_id: be5657d2-7661-4c17-96b7-b748e833cc66
+      label: Left DIN Rail:1
+      part_number: RAIL-DIN-200
+      visible: true
+      transform_matrix_cm:
+        - 1.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 3.5
+        - 1.0
+  components:
+    - component_id: 7e4225a8-9233-48f2-8a75-535659a21cd0
+      label: Backplate
+      opacity: 0.35
+    - component_id: 591d21b4-2915-4dd3-a266-8e08f9bd41fa
+      label: Left DIN Rail
+      opacity: 1.0
+output:
+  image_file: assets/generated/install-left-din-rail__78b36cd7.png
+  thumbnail_file: assets/thumbnails/install-left-din-rail__78b36cd7.png
+  width_px: 2400
+  height_px: 1600
+  thumbnail_width_px: 480
+  thumbnail_height_px: 320
+  transparent_background: true
+  anti_alias: true

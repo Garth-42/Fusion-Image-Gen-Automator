@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/fmsm/manual-project.schema.json",
+  "title": "FMSM Manual Project Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "source_document",
+        "render_defaults",
+        "scenes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "source_document": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "data_file_id",
+            "name",
+            "role"
+          ],
+          "properties": {
+            "data_file_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "role": {
+              "const": "documentation_assembly"
+            }
+          }
+        },
+        "render_defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "width_px",
+            "height_px",
+            "transparent_background",
+            "anti_alias"
+          ],
+          "properties": {
+            "width_px": {
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 16384
+            },
+            "height_px": {
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 16384
+            },
+            "transparent_background": {
+              "type": "boolean"
+            },
+            "anti_alias": {
+              "type": "boolean"
+            }
+          }
+        },
+        "scenes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scene_id",
+              "file"
+            ],
+            "properties": {
+              "scene_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "file": {
+                "type": "string",
+                "pattern": "^scenes/[A-Za-z0-9._/-]+\\.ya?ml$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
