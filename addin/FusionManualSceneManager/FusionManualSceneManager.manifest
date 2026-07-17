@@ -1,0 +1,13 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "addin",
+  "id": "d052ffa7-50d5-4c45-9042-c7e14d151691",
+  "author": "Fusion Manual Scene Manager contributors",
+  "description": {
+    "": "Author, restore, and render repeatable assembly-manual scenes."
+  },
+  "version": "0.1.0",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}
