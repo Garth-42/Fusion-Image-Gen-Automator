@@ -27,6 +27,7 @@ its connection-status line.
 | `SCENE_REFERENCE_MISSING` | Referenced Fusion entity is absent |
 | `DUPLICATE_OCCURRENCE_ID` | More than one occurrence uses the same UUID |
 | `DUPLICATE_COMPONENT_ID` | More than one component uses the same UUID |
+| `IDENTITY_ASSIGN_FAILED` | Fusion could not persist a stable entity UUID |
 | `CAMERA_INVALID` | Camera values are non-finite or geometrically invalid |
 | `TRANSFORM_INVALID` | Transform is malformed or non-finite |
 | `OUTPUT_PATH_UNSAFE` | Resolved output path escapes project root |
