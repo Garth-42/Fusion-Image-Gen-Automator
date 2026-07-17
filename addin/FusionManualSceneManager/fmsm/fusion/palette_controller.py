@@ -1,4 +1,4 @@
-"""The only module in the initial skeleton that imports Fusion's adsk package."""
+"""Fusion palette adapter; this is the only initial module that imports ``adsk``."""
 from __future__ import absolute_import
 
 import json
@@ -10,6 +10,19 @@ from fmsm.messaging.dispatcher import MessageDispatcher
 
 PALETTE_ID = "fmsm_scene_manager_palette"
 PALETTE_NAME = "Fusion Manual Scene Manager"
+
+
+def report_startup_failure(traceback_text):
+    """Log full diagnostics and show a concise, actionable error in Fusion."""
+    app = adsk.core.Application.get()
+    if app is not None:
+        app.log("FMSM startup failed:\n%s" % traceback_text)
+        ui = app.userInterface
+        if ui is not None:
+            ui.messageBox(
+                "Fusion Manual Scene Manager could not start.\n\n"
+                "Open Fusion's Text Commands window and inspect the FMSM startup log for details."
+            )
 
 
 class _IncomingHtmlHandler(adsk.core.HTMLEventHandler):
@@ -40,11 +53,17 @@ class PaletteController(object):
 
     def start(self):
         app = adsk.core.Application.get()
+        if app is None:
+            raise RuntimeError("Fusion application is unavailable.")
         ui = app.userInterface
+        if ui is None:
+            raise RuntimeError("Fusion user interface is unavailable.")
         self.palette = ui.palettes.itemById(PALETTE_ID)
         if self.palette is None:
             url = "file:///" + os.path.join(self._addin_root, "ui", "palette.html").replace("\\", "/")
             self.palette = ui.palettes.add(PALETTE_ID, PALETTE_NAME, url, True, True, True, 460, 760)
+        if self.palette is None:
+            raise RuntimeError("Fusion did not create the FMSM palette.")
         incoming = _IncomingHtmlHandler(self)
         closed = _ClosedHandler(self)
         self.palette.incomingFromHTML.add(incoming)
