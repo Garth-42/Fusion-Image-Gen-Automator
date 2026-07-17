@@ -9,13 +9,32 @@ The add-in vendors the pure-Python portion of PyYAML, so no Python package insta
 
 ## Install for development
 
+Fusion discovers add-ins by scanning **child directories** of its configured add-in search folders. The `FusionManualSceneManager` directory is an add-in bundle; it is **not** the folder to add with Fusion's **+** search-path control.
+
 1. Clone this repository locally.
 2. In Fusion, open **Utilities > Add-Ins > Scripts and Add-Ins**.
-3. Select the **Add-Ins** tab, choose **+**, and select `addin/FusionManualSceneManager` from this repository.
-4. Select **Fusion Manual Scene Manager** and click **Run**.
-5. The palette opens and confirms its local Python-to-HTML message bridge.
+3. Select the **Add-Ins** tab and click **+**.
+4. Select this **parent directory** from the repository:
 
-Fusion loads the add-in from its selected local directory. Do not move the add-in directory while it is running.
+   ```text
+   Fusion-Image-Gen-Automator/addin
+   ```
+
+   Fusion should then discover the child bundle at `addin/FusionManualSceneManager`.
+5. Close and reopen the **Scripts and Add-Ins** dialog. The add-in list should now contain **Fusion Manual Scene Manager**.
+6. Select it and click **Run**. The palette opens and confirms its local Python-to-HTML message bridge.
+
+### If the add-in still is not listed
+
+Copy the complete `FusionManualSceneManager` directory—not just its `.py` file—to one of Fusion's existing Add-Ins folders shown in the dialog. The copied directory must contain these sibling files:
+
+```text
+FusionManualSceneManager/
+├── FusionManualSceneManager.py
+└── FusionManualSceneManager.manifest
+```
+
+Then close and reopen the dialog. If the add-in is listed but fails after clicking **Run**, follow `TROUBLESHOOTING.md` to collect the startup traceback.
 
 ## Initial behavior
 
