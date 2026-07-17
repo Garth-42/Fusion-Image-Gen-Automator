@@ -9,7 +9,7 @@ If Fusion loads the add-in Python entry point, it reports startup failures in tw
 
 The add-in manifest is validated by a unit test and uses Fusion-compatible UUID and localized-description metadata. After installing an updated copy, stop the add-in and run it again from **Utilities > Add-Ins > Scripts and Add-Ins**. If the failure dialog appears, copy the entire `FMSM startup failed` traceback from Text Commands and include it in a bug report.
 
-Fusion scans child directories of configured Add-Ins search paths. Register the repository's `addin/` parent directory, not the `addin/FusionManualSceneManager` bundle itself. Fusion should then list the bundle, which contains these sibling files:
+Register the `addin/FusionManualSceneManager` bundle itself. It must contain these sibling files:
 
 ```text
 FusionManualSceneManager.py

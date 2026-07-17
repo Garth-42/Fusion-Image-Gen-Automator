@@ -9,18 +9,17 @@ The add-in vendors the pure-Python portion of PyYAML, so no Python package insta
 
 ## Install for development
 
-Fusion discovers add-ins by scanning **child directories** of its configured add-in search folders. The `FusionManualSceneManager` directory is an add-in bundle; it is **not** the folder to add with Fusion's **+** search-path control.
+In the current Fusion Add-Ins dialog, register the add-in bundle directory itself. Select `FusionManualSceneManager`, which contains the matching `.py` entry point and `.manifest` file.
 
 1. Clone this repository locally.
 2. In Fusion, open **Utilities > Add-Ins > Scripts and Add-Ins**.
 3. Select the **Add-Ins** tab and click **+**.
-4. Select this **parent directory** from the repository:
+4. Select this add-in bundle directory from the repository:
 
    ```text
-   Fusion-Image-Gen-Automator/addin
+   Fusion-Image-Gen-Automator/addin/FusionManualSceneManager
    ```
 
-   Fusion should then discover the child bundle at `addin/FusionManualSceneManager`.
 5. Close and reopen the **Scripts and Add-Ins** dialog. The add-in list should now contain **Fusion Manual Scene Manager**.
 6. Select it and click **Run**. The palette opens and confirms its local Python-to-HTML message bridge.
 
