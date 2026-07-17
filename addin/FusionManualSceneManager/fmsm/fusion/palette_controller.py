@@ -2,7 +2,7 @@
 from __future__ import absolute_import
 
 import json
-import os
+from pathlib import Path
 
 import adsk.core
 
@@ -60,8 +60,17 @@ class PaletteController(object):
             raise RuntimeError("Fusion user interface is unavailable.")
         self.palette = ui.palettes.itemById(PALETTE_ID)
         if self.palette is None:
-            url = "file:///" + os.path.join(self._addin_root, "ui", "palette.html").replace("\\", "/")
-            self.palette = ui.palettes.add(PALETTE_ID, PALETTE_NAME, url, True, True, True, 460, 760)
+            # ``file:///" + path`` produces an invalid four-slash URI on macOS
+            # because its absolute paths already start with ``/``.  The HTML
+            # itself can still be displayed there while relative assets (notably
+            # app.js) fail to load, leaving the static connecting message behind.
+            url = Path(self._addin_root, "ui", "palette.html").resolve().as_uri()
+            # Keep the document hidden until the event handlers below are
+            # installed.  Creating it visible lets its script send the one-time
+            # initial request before ``incomingFromHTML`` has a subscriber.
+            self.palette = ui.palettes.add(
+                PALETTE_ID, PALETTE_NAME, url, False, True, True, 460, 760
+            )
         if self.palette is None:
             raise RuntimeError("Fusion did not create the FMSM palette.")
         incoming = _IncomingHtmlHandler(self)
