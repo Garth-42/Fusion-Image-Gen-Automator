@@ -71,6 +71,9 @@ def _project(tmp_path):
 
 def test_summary_builds_escaped_html_document_for_project_scenes(tmp_path):
     root, fusion, settings, scene = _project(tmp_path)
+    manifest = yaml_store.load(root / "manual.yaml")
+    scene_payload = yaml_store.load(root / manifest["project"]["scenes"][0]["file"])
+    yaml_store.project_path(root, scene_payload["output"]["image_file"]).write_bytes(b"fake png")
 
     result = PreviewService(fusion, settings).summary({})
 
@@ -81,6 +84,7 @@ def test_summary_builds_escaped_html_document_for_project_scenes(tmp_path):
     assert "Install &lt;Rail&gt;" in result["body_html"]
     assert "Use bracket &amp; screw." in result["body_html"]
     assert "assets/generated/install-rail__" in result["body_html"]
+    assert "data:image/png;base64,ZmFrZSBwbmc=" in result["body_html"]
     assert scene["scene_id"] in result["body_html"]
 
 

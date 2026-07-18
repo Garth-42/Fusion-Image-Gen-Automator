@@ -1,6 +1,7 @@
 """Preview-document export for manual project scene summaries."""
 from __future__ import absolute_import
 
+import base64
 import html
 from pathlib import Path
 
@@ -78,9 +79,20 @@ class PreviewService(object):
             _section("Description", metadata.get("description", "")),
             _section("Purpose", metadata.get("purpose", "")),
             _pre_section("Instructions", metadata.get("instructions_markdown", "")),
+            self._image_html(root, output.get("image_file", ""), "Rendered image"),
             "<p class=\"meta\">Image: %s<br>Thumbnail: %s</p>" % (_escape(output.get("image_file", "")), _escape(output.get("thumbnail_file", ""))),
             "</article>",
         ]
+
+
+    def _image_html(self, root, relative, alt):
+        if not relative:
+            return ""
+        path = yaml_store.project_path(root, relative)
+        if not path.is_file():
+            return ""
+        data = base64.b64encode(path.read_bytes()).decode("ascii")
+        return "<figure><img alt=\"%s\" src=\"data:image/png;base64,%s\" style=\"max-width:100%%;height:auto\"></figure>" % (_escape(alt), data)
 
 
 def _section(title, value):
