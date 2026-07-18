@@ -104,13 +104,15 @@ class FusionEnvironment(FusionEnvironmentPort):
     def write_component_id(component_handle, component_id):
         component_handle.attributes.add(ATTRIBUTE_GROUP, COMPONENT_ID_ATTRIBUTE, component_id)
 
-    def capture_session_state(self):
+    def capture_session_state(self, records=None):
         """Capture opaque live values for guarded restoration, not persistence."""
+        if records is None:
+            records = self.identity_records()
         viewport = self._app().activeViewport
         occurrences = []
         components = []
         seen_components = set()
-        for record in self.identity_records():
+        for record in records:
             occurrence = record["occurrence_handle"]
             occurrences.append((occurrence, occurrence.isLightBulbOn, occurrence.transform2.copy()))
             key = record["component_key"]
@@ -154,8 +156,9 @@ class FusionEnvironment(FusionEnvironmentPort):
             "assembly_state": {"unlisted_occurrence_policy": "hide_and_warn", "occurrences": occurrences, "components": components},
         }
 
-    def validate_scene_references(self, scene):
-        records = self.identity_records()
+    def validate_scene_references(self, scene, records=None):
+        if records is None:
+            records = self.identity_records()
         occurrence_ids = {}
         component_ids = {}
         for record in records:
@@ -198,8 +201,9 @@ class FusionEnvironment(FusionEnvironmentPort):
         if len(matches) > 1:
             issues.append({"code": "DUPLICATE_COMPONENT_ID", "message": "More than one current component matches %s." % label, "id": identifier, "label": label})
 
-    def apply_scene_state(self, scene):
-        records = self.identity_records()
+    def apply_scene_state(self, scene, records=None):
+        if records is None:
+            records = self.identity_records()
         occurrences = {record["occurrence_id"]: record for record in records}
         components = {}
         for record in records:

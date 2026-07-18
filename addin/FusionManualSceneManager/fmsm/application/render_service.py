@@ -23,7 +23,8 @@ class RenderService(object):
         root, manifest = self._require_project()
         entry = self._entry(manifest, payload.get("scene_id"))
         scene = self._load_valid_scene(root, entry["file"])
-        issues = self._fusion.validate_scene_references(scene)
+        records = self._fusion.identity_records()
+        issues = self._fusion.validate_scene_references(scene, records)
         if issues:
             first = issues[0]
             raise ServiceError(first["code"], first["message"], {"issues": issues})
@@ -32,10 +33,10 @@ class RenderService(object):
         thumbnail_path = yaml_store.project_path(root, output.get("thumbnail_file"))
         final_path.parent.mkdir(parents=True, exist_ok=True)
         thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
-        snapshot = self._fusion.capture_session_state()
+        snapshot = self._fusion.capture_session_state(records)
         apply_result = None
         try:
-            apply_result = self._fusion.apply_scene_state(scene)
+            apply_result = self._fusion.apply_scene_state(scene, records)
             self._fusion.refresh_viewport()
             self._fusion.export_viewport_png(str(final_path), output["width_px"], output["height_px"], output.get("transparent_background", True), output.get("anti_alias", True))
             self._fusion.export_viewport_png(str(thumbnail_path), output["thumbnail_width_px"], output["thumbnail_height_px"], output.get("transparent_background", True), output.get("anti_alias", True))
