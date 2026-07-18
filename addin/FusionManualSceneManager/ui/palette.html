@@ -22,6 +22,10 @@
   label { display: block; font-size: 13px; margin: 8px 0 4px; }
   input[type="text"], textarea, select { box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit; }
   textarea { min-height: 70px; resize: vertical; }
+  .summary-preview-content { border: 1px solid #9ca3af; padding: 12px; max-height: 520px; overflow: auto; background: Canvas; }
+  .summary-preview-content article { border-top: 1px solid #d1d5db; padding: 12px 0; }
+  .summary-preview-content .meta { color: #6b7280; }
+  .summary-preview-content pre { white-space: pre-wrap; background: rgba(127,127,127,0.12); padding: 8px; }
   button { font: inherit; padding: 6px 12px; margin: 8px 8px 0 0; }
   .scene-actions button { padding: 3px 8px; margin-top: 4px; }
   ul { margin: 8px 0; padding-left: 20px; }
@@ -57,7 +61,14 @@
     <label for="scene-title">New scene title</label>
     <input id="scene-title" type="text" maxlength="200" placeholder="e.g. Install left DIN rail">
     <button id="create-scene" type="button" hidden>Create Scene from Current State</button>
+    <button id="render-all-scenes" type="button" hidden>Render All Scenes</button>
+    <button id="preview-summary" type="button" hidden>Preview Summary</button>
     <ul id="scene-list" hidden></ul>
+    <div id="summary-preview-panel" hidden>
+      <h3>Scene Summary Preview</h3>
+      <button id="close-summary-preview" type="button">Close Preview</button>
+      <div id="summary-preview-content" class="summary-preview-content" role="document"></div>
+    </div>
     <div id="scene-editor" hidden>
       <h3>Edit Selected Scene</h3>
       <p id="selected-scene-file"></p>
@@ -77,6 +88,7 @@
       <label for="edit-scene-instructions">Instructions (Markdown)</label>
       <textarea id="edit-scene-instructions"></textarea>
       <button id="save-scene" type="button">Save Metadata</button>
+      <button id="update-scene-state" type="button">Update Graphics from Current State</button>
       <button id="move-scene-up" type="button">Move Up</button>
       <button id="move-scene-down" type="button">Move Down</button>
     </div>
@@ -122,6 +134,11 @@
     sceneStatus: document.getElementById("scene-list-status"),
     sceneTitle: document.getElementById("scene-title"),
     createScene: document.getElementById("create-scene"),
+    renderAllScenes: document.getElementById("render-all-scenes"),
+    previewSummary: document.getElementById("preview-summary"),
+    summaryPreviewPanel: document.getElementById("summary-preview-panel"),
+    closeSummaryPreview: document.getElementById("close-summary-preview"),
+    summaryPreviewContent: document.getElementById("summary-preview-content"),
     sceneList: document.getElementById("scene-list"),
     sceneEditor: document.getElementById("scene-editor"),
     selectedSceneFile: document.getElementById("selected-scene-file"),
@@ -131,6 +148,7 @@
     editScenePurpose: document.getElementById("edit-scene-purpose"),
     editSceneInstructions: document.getElementById("edit-scene-instructions"),
     saveScene: document.getElementById("save-scene"),
+    updateSceneState: document.getElementById("update-scene-state"),
     moveSceneUp: document.getElementById("move-scene-up"),
     moveSceneDown: document.getElementById("move-scene-down"),
     identityPanel: document.getElementById("identity-panel"),
@@ -304,7 +322,7 @@
     elements.refresh.disabled = busy;
     elements.ensureIds.disabled = busy;
     elements.repairIds.disabled = busy;
-    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy; elements.saveScene.disabled = busy; elements.moveSceneUp.disabled = busy; elements.moveSceneDown.disabled = busy;
+    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy; elements.renderAllScenes.disabled = busy; elements.previewSummary.disabled = busy; elements.closeSummaryPreview.disabled = busy; elements.saveScene.disabled = busy; elements.updateSceneState.disabled = busy; elements.moveSceneUp.disabled = busy; elements.moveSceneDown.disabled = busy;
   }
 
   // ---- rendering -------------------------------------------------------
@@ -326,8 +344,11 @@
     clearChildren(elements.sceneList);
     if (!project) {
       elements.createScene.hidden = true;
+      elements.renderAllScenes.hidden = true;
+      elements.previewSummary.hidden = true;
       elements.sceneTitle.hidden = true;
       elements.sceneList.hidden = true;
+      elements.summaryPreviewPanel.hidden = true;
       elements.sceneEditor.hidden = true;
       currentProject = null;
       selectedSceneId = null;
@@ -336,10 +357,15 @@
     }
     currentProject = project;
     elements.createScene.hidden = false;
+    elements.renderAllScenes.hidden = false;
+    elements.previewSummary.hidden = false;
     elements.sceneTitle.hidden = false;
     if (project.scenes.length === 0) {
       elements.sceneList.hidden = true;
+      elements.renderAllScenes.hidden = true;
+      elements.previewSummary.hidden = true;
       elements.sceneEditor.hidden = true;
+      elements.summaryPreviewPanel.hidden = true;
       selectedSceneId = null;
       elements.sceneStatus.textContent = "No scenes yet. Capture the current Fusion state to create one.";
       return;
@@ -354,6 +380,10 @@
       edit.type = "button";
       edit.textContent = "Edit";
       edit.addEventListener("click", function () { loadScene(entry.scene_id); });
+      var load = document.createElement("button");
+      load.type = "button";
+      load.textContent = "Load Scene";
+      load.addEventListener("click", function () { loadSceneState(entry.scene_id); });
       var duplicate = document.createElement("button");
       duplicate.type = "button";
       duplicate.textContent = "Duplicate";
@@ -367,6 +397,7 @@
       remove.textContent = "Delete";
       remove.addEventListener("click", function () { deleteScene(entry.scene_id); });
       actions.appendChild(edit);
+      actions.appendChild(load);
       actions.appendChild(render);
       actions.appendChild(duplicate);
       actions.appendChild(remove);
@@ -473,13 +504,28 @@
     renderState(response.result);
   }
 
-  elements.initialize.addEventListener("click", function () {
+  function initializeProject(replaceAssociation) {
     sendRequest(
       "project.initialize",
-      { title: elements.title.value },
-      handleMutationResponse,
+      { title: elements.title.value, replace_association: replaceAssociation === true },
+      function (response) {
+        if (
+          !response.ok &&
+          response.error &&
+          response.error.code === "PROJECT_ALREADY_ASSOCIATED" &&
+          window.confirm("This Fusion document is already associated with a manual project, but the folder may be unavailable on this machine. Replace the association with a newly initialized project?")
+        ) {
+          initializeProject(true);
+          return;
+        }
+        handleMutationResponse(response);
+      },
       "Waiting for the Fusion confirmation and folder dialogs…"
     );
+  }
+
+  elements.initialize.addEventListener("click", function () {
+    initializeProject(false);
   });
 
   elements.open.addEventListener("click", function () {
@@ -542,6 +588,16 @@
     }, "Loading scene metadata…");
   }
 
+  function loadSceneState(sceneId) {
+    sendRequest("scene.load", { scene_id: sceneId }, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Loaded scene into Fusion. Use Restore Previous State to return to the prior view.";
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Loading saved scene state into Fusion…");
+  }
+
   function refreshAfterSceneMutation(response) {
     if (response.ok) {
       elements.feedback.textContent = "Scene list updated.";
@@ -566,6 +622,18 @@
         requestStatus();
       } else { elements.feedback.textContent = describeError(response); }
     }, "Saving scene metadata…");
+  }
+
+
+  function updateSelectedSceneState() {
+    if (!selectedSceneId) { return; }
+    if (!window.confirm("Replace this scene's saved camera, visibility, transforms, and opacity with the current Fusion view/state? Metadata and output file names will stay the same.")) { return; }
+    sendRequest("scene.update_state", { scene_id: selectedSceneId }, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Scene graphics updated from current Fusion state.";
+        requestStatus();
+      } else { elements.feedback.textContent = describeError(response); }
+    }, "Updating scene graphics from current Fusion state…");
   }
 
   function moveSelectedScene(delta) {
@@ -594,11 +662,42 @@
     }, "Applying, exporting, and restoring scene…");
   }
 
+  function showSummaryPreview(html) {
+    elements.summaryPreviewPanel.hidden = false;
+    elements.summaryPreviewContent.innerHTML = html;
+  }
+
+  function previewSummary() {
+    sendRequest("preview.summary", {}, function (response) {
+      if (response.ok) {
+        showSummaryPreview(response.result.body_html);
+        elements.feedback.textContent = "Preview updated for " + response.result.title + ".";
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Building scene summary preview…");
+  }
+
+  function renderAllScenes() {
+    sendRequest("scene.render_all", {}, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Rendered " + response.result.count + " scene(s).";
+        requestStatus();
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Rendering all scenes in manifest order…");
+  }
+
   function duplicateScene(sceneId) {
     sendRequest("scene.duplicate", { scene_id: sceneId }, refreshAfterSceneMutation, "Duplicating scene…");
   }
 
   elements.saveScene.addEventListener("click", saveSelectedScene);
+  elements.updateSceneState.addEventListener("click", updateSelectedSceneState);
+  elements.renderAllScenes.addEventListener("click", renderAllScenes);
+  elements.previewSummary.addEventListener("click", previewSummary);
+  elements.closeSummaryPreview.addEventListener("click", function () { elements.summaryPreviewPanel.hidden = true; });
   elements.moveSceneUp.addEventListener("click", function () { moveSelectedScene(-1); });
   elements.moveSceneDown.addEventListener("click", function () { moveSelectedScene(1); });
 
