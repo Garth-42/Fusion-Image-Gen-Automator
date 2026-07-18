@@ -15,6 +15,7 @@ PROJECT_ID = "0fbb1ed7-2e82-4e61-a5f8-83a2ed41e9db"
 class FakeFusion(object):
     def __init__(self):
         self.project_id = PROJECT_ID
+        self.eye_x = 1.0
 
     def active_document(self):
         return {"name": "Assembly", "data_file_id": "urn:doc"}
@@ -26,7 +27,7 @@ class FakeFusion(object):
         return {
             "camera": {
                 "type": "orthographic",
-                "eye_cm": [1.0, 2.0, 3.0],
+                "eye_cm": [self.eye_x, 2.0, 3.0],
                 "target_cm": [0.0, 0.0, 0.0],
                 "up_vector": [0.0, 0.0, 1.0],
                 "extents_cm": {"width": 10.0, "height": 8.0},
@@ -50,11 +51,12 @@ def _service(tmp_path):
     for relative in ("scenes", "assets/generated", "assets/thumbnails"):
         yaml_store.project_path(root, relative).mkdir(parents=True, exist_ok=True)
     yaml_store.write(root, "manual.yaml", new_manifest(PROJECT_ID, "Guide", "Assembly", "urn:doc"))
-    return SceneService(FakeFusion(), FakeSettings(root)), root
+    fusion = FakeFusion()
+    return SceneService(fusion, FakeSettings(root)), root, fusion
 
 
 def test_create_from_current_persists_scene_and_manifest_entry(tmp_path):
-    service, root = _service(tmp_path)
+    service, root, fusion = _service(tmp_path)
 
     result = service.create_from_current({"title": "Install Left DIN Rail", "instructions_markdown": "Do it."})
 
@@ -69,7 +71,7 @@ def test_create_from_current_persists_scene_and_manifest_entry(tmp_path):
 
 
 def test_get_returns_editable_scene_metadata(tmp_path):
-    service, root = _service(tmp_path)
+    service, root, fusion = _service(tmp_path)
     scene_id = service.create_from_current({
         "title": "Editable",
         "description": "Describe",
@@ -88,7 +90,7 @@ def test_get_returns_editable_scene_metadata(tmp_path):
 
 
 def test_update_metadata_does_not_rename_or_modify_captured_state(tmp_path):
-    service, root = _service(tmp_path)
+    service, root, fusion = _service(tmp_path)
     scene_id = service.create_from_current({"title": "First"})["scene"]["scene_id"]
     entry = yaml_store.load(root / "manual.yaml")["project"]["scenes"][0]
     before = yaml_store.load(root / entry["file"])
@@ -105,7 +107,7 @@ def test_update_metadata_does_not_rename_or_modify_captured_state(tmp_path):
 
 
 def test_duplicate_uses_new_scene_id_and_output_paths(tmp_path):
-    service, root = _service(tmp_path)
+    service, root, fusion = _service(tmp_path)
     original_id = service.create_from_current({"title": "Original"})["scene"]["scene_id"]
 
     duplicate = service.duplicate({"scene_id": original_id})["scene"]
@@ -120,7 +122,7 @@ def test_duplicate_uses_new_scene_id_and_output_paths(tmp_path):
 
 
 def test_delete_removes_scene_and_known_assets_inside_project_root(tmp_path):
-    service, root = _service(tmp_path)
+    service, root, fusion = _service(tmp_path)
     scene_id = service.create_from_current({"title": "Delete Me"})["scene"]["scene_id"]
     entry = yaml_store.load(root / "manual.yaml")["project"]["scenes"][0]
     scene = yaml_store.load(root / entry["file"])
@@ -137,7 +139,7 @@ def test_delete_removes_scene_and_known_assets_inside_project_root(tmp_path):
 
 
 def test_reorder_requires_exact_scene_ids(tmp_path):
-    service, root = _service(tmp_path)
+    service, root, fusion = _service(tmp_path)
     first = service.create_from_current({"title": "First"})["scene"]["scene_id"]
     second = service.create_from_current({"title": "Second"})["scene"]["scene_id"]
 
@@ -145,3 +147,20 @@ def test_reorder_requires_exact_scene_ids(tmp_path):
     with pytest.raises(ServiceError) as error:
         service.reorder({"scene_ids": [first]})
     assert error.value.code == "SCENE_REORDER_INVALID"
+
+
+def test_update_state_recaptures_graphics_without_changing_metadata_or_outputs(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    scene_id = service.create_from_current({"title": "Pose", "instructions_markdown": "Keep"})["scene"]["scene_id"]
+    entry = yaml_store.load(root / "manual.yaml")["project"]["scenes"][0]
+    before = yaml_store.load(root / entry["file"])
+    fusion.eye_x = 9.0
+
+    result = service.update_state({"scene_id": scene_id})
+
+    after = yaml_store.load(root / entry["file"])
+    assert result["scene"]["scene_id"] == scene_id
+    assert after["scene"] == before["scene"]
+    assert after["output"] == before["output"]
+    assert after["camera"]["eye_cm"] == [9.0, 2.0, 3.0]
+    assert after["source"]["captured_at_utc"] >= before["source"]["captured_at_utc"]

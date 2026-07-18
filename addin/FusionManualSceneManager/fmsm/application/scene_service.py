@@ -30,6 +30,7 @@ class SceneService(object):
             "scene.get": self.get,
             "scene.create_from_current": self.create_from_current,
             "scene.update_metadata": self.update_metadata,
+            "scene.update_state": self.update_state,
             "scene.duplicate": self.duplicate,
             "scene.delete": self.delete,
             "scene.reorder": self.reorder,
@@ -79,6 +80,17 @@ class SceneService(object):
         for key in _METADATA_FIELDS:
             if key in payload:
                 self._apply_metadata(metadata, key, payload.get(key))
+        self._write_scene(root, entry["file"], scene)
+        return {"scene": self._scene_summary(root, entry)}
+
+    def update_state(self, payload):
+        root, manifest = self._require_project()
+        entry = self._entry(manifest, payload.get("scene_id"))
+        scene = self._load_valid_scene(root, entry["file"])
+        state = self._fusion.capture_scene_state()
+        scene["camera"] = state.get("camera")
+        scene["assembly_state"] = state.get("assembly_state")
+        scene["source"] = self._source_snapshot(manifest)
         self._write_scene(root, entry["file"], scene)
         return {"scene": self._scene_summary(root, entry)}
 
