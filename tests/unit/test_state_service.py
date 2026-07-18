@@ -81,7 +81,7 @@ def test_apply_keeps_a_pre_scene_snapshot_until_explicit_restore():
     service = SceneStateService(fusion)
 
     assert service.apply(scene()) == {"warnings": []}
-    assert service.restore() == {"restored": True}
+    assert service.restore({}) == {"restored": True}
 
     assert fusion.events == ["validate_references", "capture", "apply", "refresh", ("restore", {"camera": "before"}), "refresh"]
 
