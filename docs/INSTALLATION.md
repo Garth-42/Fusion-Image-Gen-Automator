@@ -37,4 +37,10 @@ Then close and reopen the dialog. If the add-in is listed but fails after clicki
 
 ## Initial behavior
 
-This implementation provides the add-in manifest, a dockable local palette, project initialization/open, stable occurrence/component UUID management, vendored YAML support, and a pure-Python persistence foundation. It deliberately does not yet expose CAD-state capture, scene CRUD, state restoration, or rendering controls; those follow the implementation sequence in `05_IMPLEMENTATION_PLAN.md`.
+This implementation provides the add-in manifest, a dockable local palette, project initialization/open, stable occurrence/component UUID management, scene capture/edit/reorder/duplicate/delete, guarded state preview/apply/restore, and guarded final/thumbnail PNG rendering. It still requires the Fusion acceptance pass in `FUSION_ACCEPTANCE_CHECKLIST.md` before a release candidate is tagged.
+
+## Upgrade and uninstall
+
+To upgrade a development install, stop the add-in in Fusion, replace the complete `FusionManualSceneManager` bundle, and run the add-in again. The palette is rebuilt from scratch on start so stale HTML is not intentionally retained.
+
+To uninstall, stop the add-in and remove the copied or registered `FusionManualSceneManager` bundle from Fusion's Add-Ins location. Existing manual project repositories are ordinary local folders; remove them separately only if you no longer need the authored scene YAML and generated PNGs.

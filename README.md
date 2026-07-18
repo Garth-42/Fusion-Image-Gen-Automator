@@ -46,7 +46,8 @@ Do **not** implement these roadmap features in the first deliverable:
 8. `docs/06_TEST_STRATEGY.md`
 9. `docs/07_ROADMAP.md`
 10. `docs/08_RISKS_AND_API_NOTES.md`
-11. `docs/adr/*`
+11. `docs/FUSION_ACCEPTANCE_CHECKLIST.md`
+12. `docs/adr/*`
 
 Machine-readable schemas and example YAML are under `schemas/` and `examples/`.
 

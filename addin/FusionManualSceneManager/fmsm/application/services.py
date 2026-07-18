@@ -167,7 +167,18 @@ class ProjectService(object):
                 "id": project["id"],
                 "title": project["title"],
                 "root": str(root),
-                "scenes": [dict(entry) for entry in project["scenes"]],
+                "scenes": [_scene_entry_summary(root, entry) for entry in project["scenes"]],
             },
             "warnings": warnings,
         }
+
+
+def _scene_entry_summary(root, entry):
+    summary = dict(entry)
+    path = yaml_store.project_path(root, entry["file"])
+    if path.exists():
+        scene = yaml_store.load(path)
+        if isinstance(scene, dict) and isinstance(scene.get("scene"), dict):
+            summary["title"] = scene["scene"].get("title", "")
+            summary["status"] = scene["scene"].get("status", "draft")
+    return summary

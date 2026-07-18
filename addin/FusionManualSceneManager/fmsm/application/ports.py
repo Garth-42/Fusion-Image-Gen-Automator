@@ -44,3 +44,31 @@ class FusionEnvironmentPort(object):
     def write_component_id(self, component_handle, component_id):
         """Write a UUID attribute to one managed component."""
         raise NotImplementedError
+
+    def capture_session_state(self):
+        """Capture camera and managed assembly state for later restoration."""
+        raise NotImplementedError
+
+    def capture_scene_state(self):
+        """Capture a serializable camera and assembly-state payload."""
+        raise NotImplementedError
+
+    def validate_scene_references(self, scene):
+        """Return blocking reference diagnostics without mutating Fusion."""
+        raise NotImplementedError
+
+    def apply_scene_state(self, scene):
+        """Apply a previously validated scene state on the Fusion UI thread."""
+        raise NotImplementedError
+
+    def restore_session_state(self, snapshot):
+        """Restore a snapshot captured by :meth:`capture_session_state`."""
+        raise NotImplementedError
+
+    def refresh_viewport(self):
+        """Refresh Fusion's viewport after applying or restoring state."""
+        raise NotImplementedError
+
+    def export_viewport_png(self, path, width_px, height_px, transparent_background, anti_alias):
+        """Export the current viewport to a PNG at ``path``."""
+        raise NotImplementedError
