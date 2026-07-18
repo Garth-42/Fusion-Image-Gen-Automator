@@ -480,13 +480,28 @@
     renderState(response.result);
   }
 
-  elements.initialize.addEventListener("click", function () {
+  function initializeProject(replaceAssociation) {
     sendRequest(
       "project.initialize",
-      { title: elements.title.value },
-      handleMutationResponse,
+      { title: elements.title.value, replace_association: replaceAssociation === true },
+      function (response) {
+        if (
+          !response.ok &&
+          response.error &&
+          response.error.code === "PROJECT_ALREADY_ASSOCIATED" &&
+          window.confirm("This Fusion document is already associated with a manual project, but the folder may be unavailable on this machine. Replace the association with a newly initialized project?")
+        ) {
+          initializeProject(true);
+          return;
+        }
+        handleMutationResponse(response);
+      },
       "Waiting for the Fusion confirmation and folder dialogs…"
     );
+  }
+
+  elements.initialize.addEventListener("click", function () {
+    initializeProject(false);
   });
 
   elements.open.addEventListener("click", function () {
