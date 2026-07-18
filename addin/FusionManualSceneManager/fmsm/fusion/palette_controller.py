@@ -67,7 +67,7 @@ class PaletteController(object):
         project_service = ProjectService(fusion, SettingsStore())
         identity_service = IdentityService(fusion)
         state_service = SceneStateService(fusion)
-        scene_service = SceneService(fusion, SettingsStore())
+        scene_service = SceneService(fusion, SettingsStore(), state_service)
         render_service = RenderService(fusion, SettingsStore())
         handlers = project_service.handlers()
         handlers.update(identity_service.handlers())

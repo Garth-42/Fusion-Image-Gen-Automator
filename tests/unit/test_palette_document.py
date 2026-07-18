@@ -52,10 +52,12 @@ def test_document_contains_the_handshake_and_its_failure_states():
 def test_document_contains_the_project_workflow_controls():
     html = DOCUMENT.read_text(encoding="utf-8")
 
-    for element_id in ("project-title", "initialize-project", "open-project", "refresh-status", "scene-list"):
+    for element_id in ("project-title", "initialize-project", "open-project", "refresh-status", "scene-list", "render-all-scenes", "update-scene-state"):
         assert 'id="%s"' % element_id in html
-    for action in ("project.status", "project.initialize", "project.open"):
+    for action in ("project.status", "project.initialize", "project.open", "scene.load", "scene.render_all", "scene.update_state"):
         assert action in html
+    assert "PROJECT_ALREADY_ASSOCIATED" in html
+    assert "replace_association" in html
 
 
 def test_document_contains_identity_management_controls():
