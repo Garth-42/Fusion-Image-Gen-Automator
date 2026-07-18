@@ -50,3 +50,8 @@ python3 -m compileall -q addin/FusionManualSceneManager
 ```
 
 These checks do not require Fusion. They cannot validate the installed Fusion runtime, palette host, or graphics driver.
+
+
+## Release-candidate verification
+
+Before treating an installed copy as release-ready, run the pure-Python checks above and then execute `docs/FUSION_ACCEPTANCE_CHECKLIST.md` inside Fusion against the required fixture assemblies. Live Fusion verification is required for camera, transform, opacity, viewport export, and restore behavior because those APIs cannot be exercised by the pure-Python unit tests.
