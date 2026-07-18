@@ -20,6 +20,7 @@ def test_project_actions_are_allowed():
     assert {
         "system.ping", "project.status", "project.initialize", "project.open",
         "identity.status", "identity.ensure_ids", "identity.repair_duplicates",
+        "state.capture_current", "state.apply_captured", "state.restore",
     } == set(ALLOWED_ACTIONS)
 
 

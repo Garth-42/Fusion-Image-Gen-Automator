@@ -120,6 +120,40 @@ class FusionEnvironment(FusionEnvironmentPort):
                 components.append((component, component.opacity))
         return {"camera": viewport.camera, "occurrences": occurrences, "components": components}
 
+    def capture_scene_state(self):
+        """Capture the current view as primitive data suitable for a scene file."""
+        camera = self._app().activeViewport.camera
+        success, width, height = camera.getExtents()
+        if not success:
+            raise RuntimeError("Fusion could not read the current camera extents.")
+        camera_type = "orthographic" if camera.cameraType == adsk.core.CameraTypes.OrthographicCameraType else "perspective"
+        records = self.identity_records()
+        components = []
+        seen_components = set()
+        occurrences = []
+        for record in records:
+            occurrence = record["occurrence_handle"]
+            occurrences.append({
+                "occurrence_id": record["occurrence_id"], "label": record["label"],
+                "part_number": record["part_number"], "visible": occurrence.isLightBulbOn,
+                "transform_matrix_cm": list(occurrence.transform2.asArray()),
+            })
+            if record["component_key"] not in seen_components:
+                seen_components.add(record["component_key"])
+                components.append({"component_id": record["component_id"], "label": record["component_label"], "opacity": record["component_handle"].opacity})
+        return {
+            "camera": {
+                "type": camera_type,
+                "eye_cm": [camera.eye.x, camera.eye.y, camera.eye.z],
+                "target_cm": [camera.target.x, camera.target.y, camera.target.z],
+                "up_vector": [camera.upVector.x, camera.upVector.y, camera.upVector.z],
+                "extents_cm": {"width": width, "height": height} if camera_type == "orthographic" else None,
+                "perspective_angle_rad": None if camera_type == "orthographic" else camera.perspectiveAngle,
+                "is_fit_view": False,
+            },
+            "assembly_state": {"unlisted_occurrence_policy": "hide_and_warn", "occurrences": occurrences, "components": components},
+        }
+
     def validate_scene_references(self, scene):
         records = self.identity_records()
         occurrence_ids = {}

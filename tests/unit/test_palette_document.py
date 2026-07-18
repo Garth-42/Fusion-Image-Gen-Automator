@@ -67,6 +67,13 @@ def test_document_contains_identity_management_controls():
         assert action in html
 
 
+def test_document_contains_state_preview_controls():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    for action in ("state.capture_current", "state.apply_captured", "state.restore"):
+        assert action in html
+
+
 def test_controller_url_points_at_the_document(monkeypatch):
     controller_module = _palette_controller(monkeypatch)
 

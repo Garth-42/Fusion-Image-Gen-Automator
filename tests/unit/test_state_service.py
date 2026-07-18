@@ -22,6 +22,9 @@ class FakeFusion(object):
         self.events.append("capture")
         return {"camera": "before"}
 
+    def capture_scene_state(self):
+        return scene_state()
+
     def validate_scene_references(self, scene):
         self.events.append("validate_references")
         return self.references
@@ -48,6 +51,19 @@ def scene():
         "camera": {"eye_cm": [1, 0, 0], "target_cm": [0, 0, 0], "up_vector": [0, 0, 1]},
         "assembly_state": {"occurrences": []},
     }
+
+
+def scene_state():
+    result = scene()
+    return {"camera": result["camera"], "assembly_state": {"occurrences": [], "components": []}}
+
+
+def test_capture_and_apply_current_state_are_user_reachable_handlers():
+    fusion = FakeFusion()
+    service = SceneStateService(fusion)
+
+    assert service.capture_current({}) == {"captured": True, "occurrences": 0, "components": 0}
+    assert service.apply_captured({}) == {"warnings": []}
 
 
 def test_apply_validates_references_before_capturing_or_mutating():

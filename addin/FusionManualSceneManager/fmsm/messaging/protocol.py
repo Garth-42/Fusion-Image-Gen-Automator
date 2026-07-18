@@ -13,6 +13,9 @@ ALLOWED_ACTIONS = frozenset([
     "identity.status",
     "identity.ensure_ids",
     "identity.repair_duplicates",
+    "state.capture_current",
+    "state.apply_captured",
+    "state.restore",
 ])
 # Stamped on error responses to requests whose own id could not be parsed.
 NULL_REQUEST_ID = "00000000-0000-0000-0000-000000000000"

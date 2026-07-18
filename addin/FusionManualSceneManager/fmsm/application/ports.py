@@ -49,6 +49,10 @@ class FusionEnvironmentPort(object):
         """Capture camera and managed assembly state for later restoration."""
         raise NotImplementedError
 
+    def capture_scene_state(self):
+        """Capture a serializable camera and assembly-state payload."""
+        raise NotImplementedError
+
     def validate_scene_references(self, scene):
         """Return blocking reference diagnostics without mutating Fusion."""
         raise NotImplementedError

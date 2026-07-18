@@ -61,6 +61,13 @@
     <button id="repair-ids" type="button">Repair Duplicate IDs</button>
     <ul id="identity-details" class="warning-list"></ul>
   </section>
+  <section id="state-panel" hidden>
+    <h2>Scene State Preview</h2>
+    <p id="state-status">Capture the current Fusion state to preview apply and restore.</p>
+    <button id="capture-state" type="button">Capture Current State</button>
+    <button id="apply-state" type="button">Apply Captured State</button>
+    <button id="restore-state" type="button">Restore Previous State</button>
+  </section>
 </main>
 <script>
 (function () {
@@ -84,7 +91,9 @@
     identityStatus: document.getElementById("identity-status"),
     ensureIds: document.getElementById("ensure-ids"),
     repairIds: document.getElementById("repair-ids"),
-    identityDetails: document.getElementById("identity-details")
+    identityDetails: document.getElementById("identity-details"),
+    statePanel: document.getElementById("state-panel"), stateStatus: document.getElementById("state-status"),
+    captureState: document.getElementById("capture-state"), applyState: document.getElementById("apply-state"), restoreState: document.getElementById("restore-state")
   };
 
   // The page's whole job during startup is to replace the connecting message,
@@ -247,6 +256,7 @@
     elements.refresh.disabled = busy;
     elements.ensureIds.disabled = busy;
     elements.repairIds.disabled = busy;
+    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy;
   }
 
   // ---- rendering -------------------------------------------------------
@@ -305,8 +315,10 @@
     renderScenes(result.project);
     if (result.document) {
       requestIdentityStatus();
+      elements.statePanel.hidden = false;
     } else {
       elements.identityPanel.hidden = true;
+      elements.statePanel.hidden = true;
     }
   }
 
@@ -420,6 +432,17 @@
       }
     }, "Repairing duplicate IDs…");
   });
+
+  function stateRequest(action, text) {
+    sendRequest(action, {}, function (response) {
+      if (response.ok) {
+        elements.stateStatus.textContent = action === "state.restore" ? (response.result.restored ? "Previous state restored." : "No applied state to restore.") : "Captured state contains " + response.result.occurrences + " occurrence(s) and " + response.result.components + " component(s).";
+      } else { elements.stateStatus.textContent = describeError(response); }
+    }, text);
+  }
+  elements.captureState.addEventListener("click", function () { stateRequest("state.capture_current", "Capturing current Fusion state…"); });
+  elements.applyState.addEventListener("click", function () { stateRequest("state.apply_captured", "Applying captured state…"); });
+  elements.restoreState.addEventListener("click", function () { stateRequest("state.restore", "Restoring previous Fusion state…"); });
 
   // ---- startup ---------------------------------------------------------
 

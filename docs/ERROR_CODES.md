@@ -33,6 +33,7 @@ its connection-status line.
 | `OUTPUT_PATH_UNSAFE` | Resolved output path escapes project root |
 | `OPACITY_REPLAY_UNSUPPORTED` | Requested opacity state cannot be replayed safely |
 | `STATE_RESTORE_FAILED` | Pre-operation Fusion state could not be fully restored |
+| `STATE_NOT_CAPTURED` | No in-memory state preview is available to apply |
 | `RENDER_FAILED` | Fusion image export failed |
 | `OPERATION_IN_PROGRESS` | Another state-mutating operation owns the lock |
 
