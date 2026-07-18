@@ -71,6 +71,13 @@ class ProjectService(object):
         if not 1 <= len(title) <= 200:
             raise ServiceError("PROJECT_TITLE_INVALID", "Project title must be 1-200 characters.")
         document = self._require_document()
+        existing_project_id = self._fusion.read_project_id()
+        if existing_project_id is not None and payload.get("replace_association") is not True:
+            raise ServiceError(
+                "PROJECT_ALREADY_ASSOCIATED",
+                "This document is already associated with a manual project. Use Open Project to reselect its existing folder.",
+                {"project_id": existing_project_id},
+            )
         if not self._fusion.confirm(CONFIRM_INITIALIZE):
             return {"cancelled": True}
         root = self._fusion.choose_folder("Select an empty folder or Git working tree for the manual project")
