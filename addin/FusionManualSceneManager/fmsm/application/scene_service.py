@@ -27,6 +27,7 @@ class SceneService(object):
     def handlers(self):
         return {
             "scene.list": self.list,
+            "scene.get": self.get,
             "scene.create_from_current": self.create_from_current,
             "scene.update_metadata": self.update_metadata,
             "scene.duplicate": self.duplicate,
@@ -37,6 +38,23 @@ class SceneService(object):
     def list(self, payload):
         root, manifest = self._require_project()
         return {"scenes": [self._scene_summary(root, entry) for entry in manifest["project"]["scenes"]]}
+
+    def get(self, payload):
+        root, manifest = self._require_project()
+        entry = self._entry(manifest, payload.get("scene_id"))
+        scene = self._load_valid_scene(root, entry["file"])
+        metadata = scene["scene"]
+        return {
+            "scene_id": entry["scene_id"],
+            "file": entry["file"],
+            "title": metadata.get("title", ""),
+            "description": metadata.get("description", ""),
+            "purpose": metadata.get("purpose", ""),
+            "instructions_markdown": metadata.get("instructions_markdown", ""),
+            "status": metadata.get("status", "draft"),
+            "tags": list(metadata.get("tags") or []),
+            "output": dict(scene.get("output", {})),
+        }
 
     def create_from_current(self, payload):
         root, manifest = self._require_project()

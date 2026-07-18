@@ -68,6 +68,25 @@ def test_create_from_current_persists_scene_and_manifest_entry(tmp_path):
     assert payload["output"]["image_file"].startswith("assets/generated/install-left-din-rail__")
 
 
+def test_get_returns_editable_scene_metadata(tmp_path):
+    service, root = _service(tmp_path)
+    scene_id = service.create_from_current({
+        "title": "Editable",
+        "description": "Describe",
+        "purpose": "Teach",
+        "instructions_markdown": "* Step",
+    })["scene"]["scene_id"]
+
+    result = service.get({"scene_id": scene_id})
+
+    assert result["scene_id"] == scene_id
+    assert result["title"] == "Editable"
+    assert result["description"] == "Describe"
+    assert result["purpose"] == "Teach"
+    assert result["instructions_markdown"] == "* Step"
+    assert result["status"] == "draft"
+
+
 def test_update_metadata_does_not_rename_or_modify_captured_state(tmp_path):
     service, root = _service(tmp_path)
     scene_id = service.create_from_current({"title": "First"})["scene"]["scene_id"]

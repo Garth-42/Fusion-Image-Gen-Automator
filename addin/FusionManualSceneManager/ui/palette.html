@@ -20,7 +20,8 @@
   h2 { font-size: 14px; }
   .notice { border-left: 3px solid #d97706; padding-left: 10px; line-height: 1.4; }
   label { display: block; font-size: 13px; margin: 8px 0 4px; }
-  input[type="text"] { box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit; }
+  input[type="text"], textarea, select { box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit; }
+  textarea { min-height: 70px; resize: vertical; }
   button { font: inherit; padding: 6px 12px; margin: 8px 8px 0 0; }
   .scene-actions button { padding: 3px 8px; margin-top: 4px; }
   ul { margin: 8px 0; padding-left: 20px; }
@@ -57,6 +58,28 @@
     <input id="scene-title" type="text" maxlength="200" placeholder="e.g. Install left DIN rail">
     <button id="create-scene" type="button" hidden>Create Scene from Current State</button>
     <ul id="scene-list" hidden></ul>
+    <div id="scene-editor" hidden>
+      <h3>Edit Selected Scene</h3>
+      <p id="selected-scene-file"></p>
+      <label for="edit-scene-title">Title</label>
+      <input id="edit-scene-title" type="text" maxlength="200">
+      <label for="edit-scene-status">Status</label>
+      <select id="edit-scene-status">
+        <option value="draft">draft</option>
+        <option value="review">review</option>
+        <option value="approved">approved</option>
+        <option value="obsolete">obsolete</option>
+      </select>
+      <label for="edit-scene-description">Description</label>
+      <textarea id="edit-scene-description"></textarea>
+      <label for="edit-scene-purpose">Purpose</label>
+      <textarea id="edit-scene-purpose"></textarea>
+      <label for="edit-scene-instructions">Instructions (Markdown)</label>
+      <textarea id="edit-scene-instructions"></textarea>
+      <button id="save-scene" type="button">Save Metadata</button>
+      <button id="move-scene-up" type="button">Move Up</button>
+      <button id="move-scene-down" type="button">Move Down</button>
+    </div>
   </section>
   <section id="identity-panel" hidden>
     <h2>Stable IDs</h2>
@@ -93,6 +116,16 @@
     sceneTitle: document.getElementById("scene-title"),
     createScene: document.getElementById("create-scene"),
     sceneList: document.getElementById("scene-list"),
+    sceneEditor: document.getElementById("scene-editor"),
+    selectedSceneFile: document.getElementById("selected-scene-file"),
+    editSceneTitle: document.getElementById("edit-scene-title"),
+    editSceneStatus: document.getElementById("edit-scene-status"),
+    editSceneDescription: document.getElementById("edit-scene-description"),
+    editScenePurpose: document.getElementById("edit-scene-purpose"),
+    editSceneInstructions: document.getElementById("edit-scene-instructions"),
+    saveScene: document.getElementById("save-scene"),
+    moveSceneUp: document.getElementById("move-scene-up"),
+    moveSceneDown: document.getElementById("move-scene-down"),
     identityPanel: document.getElementById("identity-panel"),
     identityStatus: document.getElementById("identity-status"),
     ensureIds: document.getElementById("ensure-ids"),
@@ -224,6 +257,8 @@
   // One request at a time mirrors the application layer's single operation
   // lock; the buttons stay disabled until the active request settles.
   var pendingRequest = null;
+  var currentProject = null;
+  var selectedSceneId = null;
 
   function newRequestId() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
@@ -262,7 +297,7 @@
     elements.refresh.disabled = busy;
     elements.ensureIds.disabled = busy;
     elements.repairIds.disabled = busy;
-    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy;
+    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy; elements.saveScene.disabled = busy; elements.moveSceneUp.disabled = busy; elements.moveSceneDown.disabled = busy;
   }
 
   // ---- rendering -------------------------------------------------------
@@ -286,13 +321,19 @@
       elements.createScene.hidden = true;
       elements.sceneTitle.hidden = true;
       elements.sceneList.hidden = true;
+      elements.sceneEditor.hidden = true;
+      currentProject = null;
+      selectedSceneId = null;
       elements.sceneStatus.textContent = "The scene-authoring workflow appears after project initialization.";
       return;
     }
+    currentProject = project;
     elements.createScene.hidden = false;
     elements.sceneTitle.hidden = false;
     if (project.scenes.length === 0) {
       elements.sceneList.hidden = true;
+      elements.sceneEditor.hidden = true;
+      selectedSceneId = null;
       elements.sceneStatus.textContent = "No scenes yet. Capture the current Fusion state to create one.";
       return;
     }
@@ -302,6 +343,10 @@
       item.textContent = entry.title || entry.file;
       var actions = document.createElement("div");
       actions.className = "scene-actions";
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", function () { loadScene(entry.scene_id); });
       var duplicate = document.createElement("button");
       duplicate.type = "button";
       duplicate.textContent = "Duplicate";
@@ -314,6 +359,7 @@
       remove.type = "button";
       remove.textContent = "Delete";
       remove.addEventListener("click", function () { deleteScene(entry.scene_id); });
+      actions.appendChild(edit);
       actions.appendChild(render);
       actions.appendChild(duplicate);
       actions.appendChild(remove);
@@ -321,6 +367,7 @@
       elements.sceneList.appendChild(item);
     });
     elements.sceneList.hidden = false;
+    if (selectedSceneId) { updateMoveButtons(); }
   }
 
   function renderState(result) {
@@ -461,6 +508,33 @@
     }, "Repairing duplicate IDs…");
   });
 
+  function renderSceneEditor(scene) {
+    selectedSceneId = scene.scene_id;
+    elements.sceneEditor.hidden = false;
+    elements.selectedSceneFile.textContent = scene.file;
+    elements.editSceneTitle.value = scene.title || "";
+    elements.editSceneStatus.value = scene.status || "draft";
+    elements.editSceneDescription.value = scene.description || "";
+    elements.editScenePurpose.value = scene.purpose || "";
+    elements.editSceneInstructions.value = scene.instructions_markdown || "";
+    updateMoveButtons();
+  }
+
+  function updateMoveButtons() {
+    var scenes = currentProject ? currentProject.scenes : [];
+    var index = -1;
+    scenes.forEach(function (entry, candidate) { if (entry.scene_id === selectedSceneId) { index = candidate; } });
+    elements.moveSceneUp.disabled = pendingRequest !== null || index <= 0;
+    elements.moveSceneDown.disabled = pendingRequest !== null || index < 0 || index >= scenes.length - 1;
+  }
+
+  function loadScene(sceneId) {
+    sendRequest("scene.get", { scene_id: sceneId }, function (response) {
+      if (response.ok) { renderSceneEditor(response.result); }
+      else { elements.feedback.textContent = describeError(response); }
+    }, "Loading scene metadata…");
+  }
+
   function refreshAfterSceneMutation(response) {
     if (response.ok) {
       elements.feedback.textContent = "Scene list updated.";
@@ -468,6 +542,38 @@
     } else {
       elements.feedback.textContent = describeError(response);
     }
+  }
+
+  function saveSelectedScene() {
+    if (!selectedSceneId) { return; }
+    sendRequest("scene.update_metadata", {
+      scene_id: selectedSceneId,
+      title: elements.editSceneTitle.value,
+      status: elements.editSceneStatus.value,
+      description: elements.editSceneDescription.value,
+      purpose: elements.editScenePurpose.value,
+      instructions_markdown: elements.editSceneInstructions.value
+    }, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Scene metadata saved.";
+        requestStatus();
+      } else { elements.feedback.textContent = describeError(response); }
+    }, "Saving scene metadata…");
+  }
+
+  function moveSelectedScene(delta) {
+    if (!currentProject || !selectedSceneId) { return; }
+    var order = currentProject.scenes.map(function (entry) { return entry.scene_id; });
+    var index = order.indexOf(selectedSceneId);
+    var target = index + delta;
+    if (index < 0 || target < 0 || target >= order.length) { return; }
+    var moved = order[index];
+    order.splice(index, 1);
+    order.splice(target, 0, moved);
+    sendRequest("scene.reorder", { scene_ids: order }, function (response) {
+      if (response.ok) { elements.feedback.textContent = "Scene order updated."; requestStatus(); }
+      else { elements.feedback.textContent = describeError(response); }
+    }, "Updating scene order…");
   }
 
   function renderScene(sceneId) {
@@ -484,6 +590,10 @@
   function duplicateScene(sceneId) {
     sendRequest("scene.duplicate", { scene_id: sceneId }, refreshAfterSceneMutation, "Duplicating scene…");
   }
+
+  elements.saveScene.addEventListener("click", saveSelectedScene);
+  elements.moveSceneUp.addEventListener("click", function () { moveSelectedScene(-1); });
+  elements.moveSceneDown.addEventListener("click", function () { moveSelectedScene(1); });
 
   function deleteScene(sceneId) {
     if (!window.confirm("Delete this scene and its generated image files?")) { return; }
