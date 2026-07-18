@@ -21,6 +21,8 @@ def test_project_actions_are_allowed():
         "system.ping", "project.status", "project.initialize", "project.open",
         "identity.status", "identity.ensure_ids", "identity.repair_duplicates",
         "state.capture_current", "state.apply_captured", "state.restore",
+        "scene.list", "scene.create_from_current", "scene.update_metadata",
+        "scene.duplicate", "scene.delete", "scene.reorder",
     } == set(ALLOWED_ACTIONS)
 
 

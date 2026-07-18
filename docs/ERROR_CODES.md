@@ -19,11 +19,18 @@ its connection-status line.
 | `PROJECT_ROOT_UNRESOLVED` | Local path mapping is missing or invalid |
 | `PROJECT_ROOT_NOT_EMPTY` | Selected folder already contains a manual project |
 | `PROJECT_TITLE_INVALID` | Project title is empty or longer than 200 characters |
+| `PROJECT_NOT_OPEN` | Scene operation was requested before a project was initialized or opened |
 | `PROJECT_ID_MISMATCH` | Document, local mapping, and manifest disagree |
 | `MANIFEST_INVALID` | manual.yaml violates the schema-version-1 structure |
 | `SCHEMA_VERSION_MISSING` | YAML lacks schema version |
 | `SCHEMA_VERSION_UNSUPPORTED` | YAML version is newer or otherwise unsupported |
 | `YAML_PARSE_FAILED` | YAML cannot be safely parsed |
+| `SCENE_TITLE_INVALID` | Scene title is empty or longer than 200 characters |
+| `SCENE_STATUS_INVALID` | Scene status is not one of the schema-supported values |
+| `SCENE_TAGS_INVALID` | Scene tags are not a list of strings |
+| `SCENE_NOT_FOUND` | Requested scene ID is not present in the manifest |
+| `SCENE_FILE_EXISTS` | Generated scene YAML path already exists |
+| `SCENE_REORDER_INVALID` | Reorder request did not include each manifest scene exactly once |
 | `SCENE_REFERENCE_MISSING` | Referenced Fusion entity is absent |
 | `DUPLICATE_OCCURRENCE_ID` | More than one occurrence uses the same UUID |
 | `DUPLICATE_COMPONENT_ID` | More than one component uses the same UUID |
@@ -49,3 +56,4 @@ its connection-status line.
 | `OUTPUT_IMAGE_MISSING` | Scene is valid but has no final image |
 | `THUMBNAIL_MISSING` | Scene is valid but has no thumbnail |
 | `SOURCE_DOCUMENT_MISMATCH` | Scene source metadata differs from active document |
+| `SCENE_ASSET_MISSING` | A generated image referenced by a deleted scene was already absent |

@@ -22,6 +22,7 @@
   label { display: block; font-size: 13px; margin: 8px 0 4px; }
   input[type="text"] { box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit; }
   button { font: inherit; padding: 6px 12px; margin: 8px 8px 0 0; }
+  .scene-actions button { padding: 3px 8px; margin-top: 4px; }
   ul { margin: 8px 0; padding-left: 20px; }
   .warning-list li { line-height: 1.4; }
   #project-feedback:empty, #project-warnings:empty { display: none; }
@@ -52,6 +53,9 @@
   <section>
     <h2>Scenes</h2>
     <p id="scene-list-status">The scene-authoring workflow appears after project initialization.</p>
+    <label for="scene-title">New scene title</label>
+    <input id="scene-title" type="text" maxlength="200" placeholder="e.g. Install left DIN rail">
+    <button id="create-scene" type="button" hidden>Create Scene from Current State</button>
     <ul id="scene-list" hidden></ul>
   </section>
   <section id="identity-panel" hidden>
@@ -86,6 +90,8 @@
     feedback: document.getElementById("project-feedback"),
     warnings: document.getElementById("project-warnings"),
     sceneStatus: document.getElementById("scene-list-status"),
+    sceneTitle: document.getElementById("scene-title"),
+    createScene: document.getElementById("create-scene"),
     sceneList: document.getElementById("scene-list"),
     identityPanel: document.getElementById("identity-panel"),
     identityStatus: document.getElementById("identity-status"),
@@ -256,7 +262,7 @@
     elements.refresh.disabled = busy;
     elements.ensureIds.disabled = busy;
     elements.repairIds.disabled = busy;
-    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy;
+    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy;
   }
 
   // ---- rendering -------------------------------------------------------
@@ -277,19 +283,36 @@
   function renderScenes(project) {
     clearChildren(elements.sceneList);
     if (!project) {
+      elements.createScene.hidden = true;
+      elements.sceneTitle.hidden = true;
       elements.sceneList.hidden = true;
       elements.sceneStatus.textContent = "The scene-authoring workflow appears after project initialization.";
       return;
     }
+    elements.createScene.hidden = false;
+    elements.sceneTitle.hidden = false;
     if (project.scenes.length === 0) {
       elements.sceneList.hidden = true;
-      elements.sceneStatus.textContent = "No scenes yet. Scene creation arrives with the capture milestone.";
+      elements.sceneStatus.textContent = "No scenes yet. Capture the current Fusion state to create one.";
       return;
     }
     elements.sceneStatus.textContent = project.scenes.length + " scene(s) in manifest order:";
     project.scenes.forEach(function (entry) {
       var item = document.createElement("li");
-      item.textContent = entry.file;
+      item.textContent = entry.title || entry.file;
+      var actions = document.createElement("div");
+      actions.className = "scene-actions";
+      var duplicate = document.createElement("button");
+      duplicate.type = "button";
+      duplicate.textContent = "Duplicate";
+      duplicate.addEventListener("click", function () { duplicateScene(entry.scene_id); });
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", function () { deleteScene(entry.scene_id); });
+      actions.appendChild(duplicate);
+      actions.appendChild(remove);
+      item.appendChild(actions);
       elements.sceneList.appendChild(item);
     });
     elements.sceneList.hidden = false;
@@ -431,6 +454,28 @@
         elements.feedback.textContent = describeError(response);
       }
     }, "Repairing duplicate IDs…");
+  });
+
+  function refreshAfterSceneMutation(response) {
+    if (response.ok) {
+      elements.feedback.textContent = "Scene list updated.";
+      requestStatus();
+    } else {
+      elements.feedback.textContent = describeError(response);
+    }
+  }
+
+  function duplicateScene(sceneId) {
+    sendRequest("scene.duplicate", { scene_id: sceneId }, refreshAfterSceneMutation, "Duplicating scene…");
+  }
+
+  function deleteScene(sceneId) {
+    if (!window.confirm("Delete this scene and its generated image files?")) { return; }
+    sendRequest("scene.delete", { scene_id: sceneId }, refreshAfterSceneMutation, "Deleting scene…");
+  }
+
+  elements.createScene.addEventListener("click", function () {
+    sendRequest("scene.create_from_current", { title: elements.sceneTitle.value }, refreshAfterSceneMutation, "Capturing current Fusion state into a scene file…");
   });
 
   function stateRequest(action, text) {
