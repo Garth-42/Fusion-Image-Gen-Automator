@@ -213,6 +213,15 @@ class FusionEnvironment(FusionEnvironmentPort):
     def refresh_viewport(self):
         self._app().activeViewport.refresh()
 
+    def export_viewport_png(self, path, width_px, height_px, transparent_background, anti_alias):
+        viewport = self._app().activeViewport
+        if hasattr(viewport, "isBackgroundTransparent"):
+            viewport.isBackgroundTransparent = transparent_background
+        if hasattr(viewport, "isAntiAliasingEnabled"):
+            viewport.isAntiAliasingEnabled = anti_alias
+        if not viewport.saveAsImageFile(path, width_px, height_px):
+            raise RuntimeError("Fusion did not save the viewport image.")
+
     def _apply_camera(self, camera_state):
         viewport = self._app().activeViewport
         camera = viewport.camera

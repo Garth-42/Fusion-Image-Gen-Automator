@@ -68,3 +68,7 @@ class FusionEnvironmentPort(object):
     def refresh_viewport(self):
         """Refresh Fusion's viewport after applying or restoring state."""
         raise NotImplementedError
+
+    def export_viewport_png(self, path, width_px, height_px, transparent_background, anti_alias):
+        """Export the current viewport to a PNG at ``path``."""
+        raise NotImplementedError

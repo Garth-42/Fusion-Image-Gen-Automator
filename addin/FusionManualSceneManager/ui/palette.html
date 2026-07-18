@@ -306,10 +306,15 @@
       duplicate.type = "button";
       duplicate.textContent = "Duplicate";
       duplicate.addEventListener("click", function () { duplicateScene(entry.scene_id); });
+      var render = document.createElement("button");
+      render.type = "button";
+      render.textContent = "Render";
+      render.addEventListener("click", function () { renderScene(entry.scene_id); });
       var remove = document.createElement("button");
       remove.type = "button";
       remove.textContent = "Delete";
       remove.addEventListener("click", function () { deleteScene(entry.scene_id); });
+      actions.appendChild(render);
       actions.appendChild(duplicate);
       actions.appendChild(remove);
       item.appendChild(actions);
@@ -463,6 +468,17 @@
     } else {
       elements.feedback.textContent = describeError(response);
     }
+  }
+
+  function renderScene(sceneId) {
+    sendRequest("scene.render", { scene_id: sceneId }, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Rendered " + response.result.image_file + " and " + response.result.thumbnail_file + ".";
+        requestStatus();
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Applying, exporting, and restoring scene…");
   }
 
   function duplicateScene(sceneId) {

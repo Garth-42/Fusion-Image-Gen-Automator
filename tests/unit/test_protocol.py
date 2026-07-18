@@ -22,7 +22,7 @@ def test_project_actions_are_allowed():
         "identity.status", "identity.ensure_ids", "identity.repair_duplicates",
         "state.capture_current", "state.apply_captured", "state.restore",
         "scene.list", "scene.create_from_current", "scene.update_metadata",
-        "scene.duplicate", "scene.delete", "scene.reorder",
+        "scene.duplicate", "scene.delete", "scene.reorder", "scene.render",
     } == set(ALLOWED_ACTIONS)
 
 

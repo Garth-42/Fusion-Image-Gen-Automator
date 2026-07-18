@@ -7,6 +7,7 @@ import adsk.core
 
 from fmsm.application.services import ProjectService
 from fmsm.application.scene_service import SceneService
+from fmsm.application.render_service import RenderService
 from fmsm.application.identity_service import IdentityService
 from fmsm.application.state_service import SceneStateService
 from fmsm.fusion.adapter import FusionEnvironment
@@ -67,10 +68,12 @@ class PaletteController(object):
         identity_service = IdentityService(fusion)
         state_service = SceneStateService(fusion)
         scene_service = SceneService(fusion, SettingsStore())
+        render_service = RenderService(fusion, SettingsStore())
         handlers = project_service.handlers()
         handlers.update(identity_service.handlers())
         handlers.update(state_service.handlers())
         handlers.update(scene_service.handlers())
+        handlers.update(render_service.handlers())
         self.dispatcher = MessageDispatcher(handlers)
         # Fusion only holds weak references to event handlers; anything not
         # retained here is garbage collected and its events silently stop.
