@@ -146,3 +146,17 @@ def test_restore_failure_is_reported(tmp_path):
 
     assert error.value.code == "STATE_RESTORE_FAILED"
     assert fusion.restored == 1
+
+
+def test_render_all_exports_each_scene_in_manifest_order_with_one_identity_scan(tmp_path):
+    service, fusion, root, first = _services(tmp_path)
+    second = SceneService(fusion, FakeSettings(root)).create_from_current({"title": "Second"})["scene"]
+
+    result = service.render_all({})
+
+    assert result["count"] == 2
+    assert [item["scene_id"] for item in result["rendered"]] == [first["scene_id"], second["scene_id"]]
+    assert fusion.identity_record_calls == 1
+    assert fusion.applied == 2
+    assert fusion.restored == 2
+    assert len(fusion.exports) == 4

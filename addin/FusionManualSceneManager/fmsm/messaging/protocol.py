@@ -20,10 +20,12 @@ ALLOWED_ACTIONS = frozenset([
     "scene.get",
     "scene.create_from_current",
     "scene.update_metadata",
+    "scene.update_state",
     "scene.duplicate",
     "scene.delete",
     "scene.reorder",
     "scene.render",
+    "scene.render_all",
 ])
 # Stamped on error responses to requests whose own id could not be parsed.
 NULL_REQUEST_ID = "00000000-0000-0000-0000-000000000000"

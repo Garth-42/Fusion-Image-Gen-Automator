@@ -17,17 +17,31 @@ class RenderService(object):
         self._settings = settings
 
     def handlers(self):
-        return {"scene.render": self.render}
+        return {"scene.render": self.render, "scene.render_all": self.render_all}
 
     def render(self, payload):
         root, manifest = self._require_project()
         entry = self._entry(manifest, payload.get("scene_id"))
-        scene = self._load_valid_scene(root, entry["file"])
         records = self._fusion.identity_records()
+        return self._render_entry(root, entry, records)
+
+    def render_all(self, payload):
+        root, manifest = self._require_project()
+        records = self._fusion.identity_records()
+        rendered = []
+        warnings = []
+        for entry in manifest["project"]["scenes"]:
+            result = self._render_entry(root, entry, records)
+            rendered.append(result)
+            warnings.extend(result.get("warnings") or [])
+        return {"rendered": rendered, "count": len(rendered), "warnings": warnings}
+
+    def _render_entry(self, root, entry, records):
+        scene = self._load_valid_scene(root, entry["file"])
         issues = self._fusion.validate_scene_references(scene, records)
         if issues:
             first = issues[0]
-            raise ServiceError(first["code"], first["message"], {"issues": issues})
+            raise ServiceError(first["code"], first["message"], {"issues": issues, "scene_id": entry["scene_id"]})
         output = scene.get("output") or {}
         final_path = yaml_store.project_path(root, output.get("image_file"))
         thumbnail_path = yaml_store.project_path(root, output.get("thumbnail_file"))
