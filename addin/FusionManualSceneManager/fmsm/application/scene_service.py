@@ -20,14 +20,16 @@ _METADATA_FIELDS = frozenset(["title", "description", "purpose", "instructions_m
 class SceneService(object):
     """Create, edit, duplicate, delete, reorder, and list scene YAML files."""
 
-    def __init__(self, fusion, settings):
+    def __init__(self, fusion, settings, state_service=None):
         self._fusion = fusion
         self._settings = settings
+        self._state_service = state_service
 
     def handlers(self):
         return {
             "scene.list": self.list,
             "scene.get": self.get,
+            "scene.load": self.load,
             "scene.create_from_current": self.create_from_current,
             "scene.update_metadata": self.update_metadata,
             "scene.update_state": self.update_state,
@@ -56,6 +58,15 @@ class SceneService(object):
             "tags": list(metadata.get("tags") or []),
             "output": dict(scene.get("output", {})),
         }
+
+    def load(self, payload):
+        if self._state_service is None:
+            raise ServiceError("SCENE_LOAD_UNAVAILABLE", "Scene loading is unavailable in this add-in session.")
+        root, manifest = self._require_project()
+        entry = self._entry(manifest, payload.get("scene_id"))
+        scene = self._load_valid_scene(root, entry["file"])
+        result = self._state_service.apply(scene)
+        return {"scene": self._scene_summary(root, entry), "warnings": result.get("warnings", [])}
 
     def create_from_current(self, payload):
         root, manifest = self._require_project()

@@ -38,6 +38,17 @@ class FakeFusion(object):
         }
 
 
+
+
+class FakeStateService(object):
+    def __init__(self):
+        self.applied = []
+
+    def apply(self, scene):
+        self.applied.append(scene)
+        return {"warnings": [{"code": "UNLISTED_OCCURRENCE_HIDDEN", "label": "extra"}]}
+
+
 class FakeSettings(object):
     def __init__(self, root):
         self.root = str(root)
@@ -164,3 +175,16 @@ def test_update_state_recaptures_graphics_without_changing_metadata_or_outputs(t
     assert after["output"] == before["output"]
     assert after["camera"]["eye_cm"] == [9.0, 2.0, 3.0]
     assert after["source"]["captured_at_utc"] >= before["source"]["captured_at_utc"]
+
+
+def test_load_applies_persisted_scene_through_state_guard(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    state_service = FakeStateService()
+    service = SceneService(fusion, FakeSettings(root), state_service)
+    scene_id = service.create_from_current({"title": "Saved View"})["scene"]["scene_id"]
+
+    result = service.load({"scene_id": scene_id})
+
+    assert result["scene"]["scene_id"] == scene_id
+    assert result["warnings"] == [{"code": "UNLISTED_OCCURRENCE_HIDDEN", "label": "extra"}]
+    assert state_service.applied[0]["scene"]["id"] == scene_id

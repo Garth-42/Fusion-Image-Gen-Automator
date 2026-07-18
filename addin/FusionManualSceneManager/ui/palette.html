@@ -361,6 +361,10 @@
       edit.type = "button";
       edit.textContent = "Edit";
       edit.addEventListener("click", function () { loadScene(entry.scene_id); });
+      var load = document.createElement("button");
+      load.type = "button";
+      load.textContent = "Load Scene";
+      load.addEventListener("click", function () { loadSceneState(entry.scene_id); });
       var duplicate = document.createElement("button");
       duplicate.type = "button";
       duplicate.textContent = "Duplicate";
@@ -374,6 +378,7 @@
       remove.textContent = "Delete";
       remove.addEventListener("click", function () { deleteScene(entry.scene_id); });
       actions.appendChild(edit);
+      actions.appendChild(load);
       actions.appendChild(render);
       actions.appendChild(duplicate);
       actions.appendChild(remove);
@@ -562,6 +567,16 @@
       if (response.ok) { renderSceneEditor(response.result); }
       else { elements.feedback.textContent = describeError(response); }
     }, "Loading scene metadata…");
+  }
+
+  function loadSceneState(sceneId) {
+    sendRequest("scene.load", { scene_id: sceneId }, function (response) {
+      if (response.ok) {
+        elements.feedback.textContent = "Loaded scene into Fusion. Use Restore Previous State to return to the prior view.";
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Loading saved scene state into Fusion…");
   }
 
   function refreshAfterSceneMutation(response) {

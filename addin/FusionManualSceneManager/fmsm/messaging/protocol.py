@@ -18,6 +18,7 @@ ALLOWED_ACTIONS = frozenset([
     "state.restore",
     "scene.list",
     "scene.get",
+    "scene.load",
     "scene.create_from_current",
     "scene.update_metadata",
     "scene.update_state",
