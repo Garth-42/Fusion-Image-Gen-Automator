@@ -76,11 +76,12 @@ def test_summary_builds_escaped_html_document_for_project_scenes(tmp_path):
 
     assert result["title"] == "Guide <Draft>"
     assert "<h1>Guide &lt;Draft&gt;</h1>" in result["html"]
-    assert "1 scene(s)" in result["html"]
-    assert "Install &lt;Rail&gt;" in result["html"]
-    assert "Use bracket &amp; screw." in result["html"]
-    assert "assets/generated/install-rail__" in result["html"]
-    assert scene["scene_id"] in result["html"]
+    assert "<h1>Guide &lt;Draft&gt;</h1>" in result["body_html"]
+    assert "1 scene(s)" in result["body_html"]
+    assert "Install &lt;Rail&gt;" in result["body_html"]
+    assert "Use bracket &amp; screw." in result["body_html"]
+    assert "assets/generated/install-rail__" in result["body_html"]
+    assert scene["scene_id"] in result["body_html"]
 
 
 def test_summary_requires_open_project_root(tmp_path):

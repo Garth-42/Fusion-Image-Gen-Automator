@@ -22,7 +22,8 @@ class PreviewService(object):
 
     def summary(self, payload):
         root, manifest = self._require_project()
-        return {"html": self._html(root, manifest), "title": manifest["project"]["title"]}
+        body_html = self._body_html(root, manifest)
+        return {"html": self._html(manifest, body_html), "body_html": body_html, "title": manifest["project"]["title"]}
 
     def _require_project(self):
         document = self._fusion.active_document()
@@ -41,20 +42,25 @@ class PreviewService(object):
             raise ServiceError(issue.code, issue.message, {"path": issue.path})
         return root, manifest
 
-    def _html(self, root, manifest):
-        project = manifest["project"]
-        parts = [
+    def _html(self, manifest, body_html):
+        return "\n".join([
             "<!doctype html>",
             "<html><head><meta charset=\"utf-8\">",
-            "<title>%s</title>" % _escape(project["title"]),
+            "<title>%s</title>" % _escape(manifest["project"]["title"]),
             "<style>body{font-family:sans-serif;margin:24px;line-height:1.4}article{border-top:1px solid #ccc;padding:16px 0}h1{margin-top:0}.meta{color:#555}pre{white-space:pre-wrap;background:#f6f6f6;padding:8px}</style>",
             "</head><body>",
+            body_html,
+            "</body></html>",
+        ])
+
+    def _body_html(self, root, manifest):
+        project = manifest["project"]
+        parts = [
             "<h1>%s</h1>" % _escape(project["title"]),
             "<p class=\"meta\">%d scene(s)</p>" % len(project["scenes"]),
         ]
         for index, entry in enumerate(project["scenes"], 1):
             parts.extend(self._scene_html(root, entry, index))
-        parts.extend(["</body></html>"])
         return "\n".join(parts)
 
     def _scene_html(self, root, entry, index):

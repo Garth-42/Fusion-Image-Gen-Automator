@@ -22,7 +22,10 @@
   label { display: block; font-size: 13px; margin: 8px 0 4px; }
   input[type="text"], textarea, select { box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit; }
   textarea { min-height: 70px; resize: vertical; }
-  iframe { box-sizing: border-box; width: 100%; min-height: 360px; border: 1px solid #9ca3af; background: white; }
+  .summary-preview-content { border: 1px solid #9ca3af; padding: 12px; max-height: 520px; overflow: auto; background: Canvas; }
+  .summary-preview-content article { border-top: 1px solid #d1d5db; padding: 12px 0; }
+  .summary-preview-content .meta { color: #6b7280; }
+  .summary-preview-content pre { white-space: pre-wrap; background: rgba(127,127,127,0.12); padding: 8px; }
   button { font: inherit; padding: 6px 12px; margin: 8px 8px 0 0; }
   .scene-actions button { padding: 3px 8px; margin-top: 4px; }
   ul { margin: 8px 0; padding-left: 20px; }
@@ -64,7 +67,7 @@
     <div id="summary-preview-panel" hidden>
       <h3>Scene Summary Preview</h3>
       <button id="close-summary-preview" type="button">Close Preview</button>
-      <iframe id="summary-preview-frame" title="Scene summary preview"></iframe>
+      <div id="summary-preview-content" class="summary-preview-content" role="document"></div>
     </div>
     <div id="scene-editor" hidden>
       <h3>Edit Selected Scene</h3>
@@ -135,7 +138,7 @@
     previewSummary: document.getElementById("preview-summary"),
     summaryPreviewPanel: document.getElementById("summary-preview-panel"),
     closeSummaryPreview: document.getElementById("close-summary-preview"),
-    summaryPreviewFrame: document.getElementById("summary-preview-frame"),
+    summaryPreviewContent: document.getElementById("summary-preview-content"),
     sceneList: document.getElementById("scene-list"),
     sceneEditor: document.getElementById("scene-editor"),
     selectedSceneFile: document.getElementById("selected-scene-file"),
@@ -661,20 +664,13 @@
 
   function showSummaryPreview(html) {
     elements.summaryPreviewPanel.hidden = false;
-    if ("srcdoc" in elements.summaryPreviewFrame) {
-      elements.summaryPreviewFrame.srcdoc = html;
-      return;
-    }
-    var frameDocument = elements.summaryPreviewFrame.contentWindow.document;
-    frameDocument.open();
-    frameDocument.write(html);
-    frameDocument.close();
+    elements.summaryPreviewContent.innerHTML = html;
   }
 
   function previewSummary() {
     sendRequest("preview.summary", {}, function (response) {
       if (response.ok) {
-        showSummaryPreview(response.result.html);
+        showSummaryPreview(response.result.body_html);
         elements.feedback.textContent = "Preview updated for " + response.result.title + ".";
       } else {
         elements.feedback.textContent = describeError(response);
