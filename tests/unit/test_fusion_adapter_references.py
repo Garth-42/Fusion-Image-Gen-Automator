@@ -73,3 +73,53 @@ def test_distinct_components_with_same_component_id_remain_duplicate(monkeypatch
         "id": component_id,
         "label": "Ball",
     }]
+
+
+def test_missing_component_reference_does_not_block_scene_validation(monkeypatch):
+    adapter = _adapter_module(monkeypatch)
+    environment = fake_environment(adapter, [
+        record("11111111-1111-4111-8111-111111111111", "occ-1", "44444444-4444-4444-8444-444444444444", "component-token"),
+        record("22222222-2222-4222-8222-222222222222", "occ-2", "44444444-4444-4444-8444-444444444444", "component-token"),
+    ])
+
+    assert environment.validate_scene_references(scene("33333333-3333-4333-8333-333333333333")) == []
+
+
+def test_apply_scene_state_warns_and_skips_missing_component_opacity(monkeypatch):
+    adapter = _adapter_module(monkeypatch)
+    adapter.adsk.core.Matrix3D = _MatrixFactory
+    environment = fake_environment(adapter, [
+        record("11111111-1111-4111-8111-111111111111", _Occurrence(), "44444444-4444-4444-8444-444444444444", "component-token"),
+        record("22222222-2222-4222-8222-222222222222", _Occurrence(), "44444444-4444-4444-8444-444444444444", "component-token"),
+    ])
+    environment._apply_camera = lambda camera: None
+    scene_state = scene("33333333-3333-4333-8333-333333333333")
+    scene_state["camera"] = {}
+    for occurrence in scene_state["assembly_state"]["occurrences"]:
+        occurrence["visible"] = True
+        occurrence["transform_matrix_cm"] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+    scene_state["assembly_state"]["components"][0]["opacity"] = 0.25
+
+    result = environment.apply_scene_state(scene_state)
+
+    assert result["warnings"] == [{"code": "COMPONENT_REFERENCE_MISSING", "label": "Ball"}]
+
+
+class _Occurrence(object):
+    def __init__(self):
+        self.isLightBulbOn = False
+        self.transform2 = None
+
+
+class _MatrixFactory(object):
+    @staticmethod
+    def create():
+        return _Matrix()
+
+
+class _Matrix(object):
+    def __init__(self):
+        self.values = None
+
+    def setWithArray(self, values):
+        self.values = list(values)

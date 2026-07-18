@@ -166,7 +166,7 @@ class FusionEnvironment(FusionEnvironmentPort):
         for reference in scene["assembly_state"]["occurrences"]:
             self._reference_issue(issues, occurrence_ids, reference["occurrence_id"], reference["label"], "occurrence")
         for reference in scene["assembly_state"].get("components", []):
-            self._reference_issue(issues, component_ids, reference["component_id"], reference["label"], "component")
+            self._component_reference_issue(issues, component_ids, reference["component_id"], reference["label"])
         return issues
 
     @staticmethod
@@ -190,6 +190,14 @@ class FusionEnvironment(FusionEnvironmentPort):
             code = "DUPLICATE_%s_ID" % kind.upper()
             issues.append({"code": code, "message": "More than one current %s matches %s." % (kind, label), "id": identifier, "label": label})
 
+    @staticmethod
+    def _component_reference_issue(issues, index, identifier, label):
+        matches = index.get(identifier, [])
+        if not matches:
+            return
+        if len(matches) > 1:
+            issues.append({"code": "DUPLICATE_COMPONENT_ID", "message": "More than one current component matches %s." % label, "id": identifier, "label": label})
+
     def apply_scene_state(self, scene):
         records = self.identity_records()
         occurrences = {record["occurrence_id"]: record for record in records}
@@ -211,7 +219,11 @@ class FusionEnvironment(FusionEnvironmentPort):
                 record["occurrence_handle"].isLightBulbOn = False
                 warnings.append({"code": "UNLISTED_OCCURRENCE_HIDDEN", "label": record["label"]})
         for reference in scene["assembly_state"].get("components", []):
-            components[reference["component_id"]]["component_handle"].opacity = reference["opacity"]
+            record = components.get(reference["component_id"])
+            if record is None:
+                warnings.append({"code": "COMPONENT_REFERENCE_MISSING", "label": reference["label"]})
+                continue
+            record["component_handle"].opacity = reference["opacity"]
         self._apply_camera(scene["camera"])
         return {"warnings": warnings}
 
