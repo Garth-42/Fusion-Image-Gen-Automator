@@ -95,6 +95,13 @@
     <button id="apply-state" type="button">Apply Captured State</button>
     <button id="restore-state" type="button">Restore Previous State</button>
   </section>
+  <section id="identity-panel" hidden>
+    <h2>Stable IDs</h2>
+    <p id="identity-status">Checking managed occurrence and component IDs…</p>
+    <button id="ensure-ids" type="button">Ensure IDs</button>
+    <button id="repair-ids" type="button">Repair Duplicate IDs</button>
+    <ul id="identity-details" class="warning-list"></ul>
+  </section>
 </main>
 <script>
 (function () {
