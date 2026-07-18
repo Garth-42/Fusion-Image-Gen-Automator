@@ -45,7 +45,7 @@ class FusionEnvironmentPort(object):
         """Write a UUID attribute to one managed component."""
         raise NotImplementedError
 
-    def capture_session_state(self):
+    def capture_session_state(self, records=None):
         """Capture camera and managed assembly state for later restoration."""
         raise NotImplementedError
 
@@ -53,11 +53,11 @@ class FusionEnvironmentPort(object):
         """Capture a serializable camera and assembly-state payload."""
         raise NotImplementedError
 
-    def validate_scene_references(self, scene):
+    def validate_scene_references(self, scene, records=None):
         """Return blocking reference diagnostics without mutating Fusion."""
         raise NotImplementedError
 
-    def apply_scene_state(self, scene):
+    def apply_scene_state(self, scene, records=None):
         """Apply a previously validated scene state on the Fusion UI thread."""
         raise NotImplementedError
 

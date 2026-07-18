@@ -77,7 +77,7 @@ class SceneStateService(object):
             raise ServiceError(references[0]["code"], references[0]["message"], references[0])
         return self._guard.apply(scene)
 
-    def restore(self):
+    def restore(self, payload=None):
         return {"restored": self._guard.restore()}
 
     @staticmethod

@@ -80,6 +80,38 @@ def test_initialize_creates_a_valid_associated_project(tmp_path):
     assert result["warnings"] == []
 
 
+def test_initialize_rejects_document_that_already_has_project_id(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    service, fusion, _ = _service(
+        tmp_path, folder=root, project_id="0fbb1ed7-2e82-4e61-a5f8-83a2ed41e9db"
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        service.initialize({"title": "Replacement"})
+
+    assert excinfo.value.code == "PROJECT_ALREADY_ASSOCIATED"
+    assert excinfo.value.details == {"project_id": "0fbb1ed7-2e82-4e61-a5f8-83a2ed41e9db"}
+    assert fusion.confirmations == []
+    assert fusion.folder_prompts == []
+    assert not (root / "manual.yaml").exists()
+
+
+def test_initialize_can_replace_existing_project_association_when_requested(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    old_project_id = "0fbb1ed7-2e82-4e61-a5f8-83a2ed41e9db"
+    service, fusion, settings = _service(tmp_path, folder=root, project_id=old_project_id)
+
+    result = service.initialize({"title": "Replacement", "replace_association": True})
+
+    manifest = yaml_store.load(root / "manual.yaml")
+    assert manifest["project"]["id"] != old_project_id
+    assert fusion.project_id == manifest["project"]["id"]
+    assert settings.project_root(fusion.project_id) == str(root)
+    assert result["project"]["title"] == "Replacement"
+
+
 def test_initialize_requires_a_usable_title(tmp_path):
     service, _, _ = _service(tmp_path)
     with pytest.raises(ServiceError) as excinfo:
