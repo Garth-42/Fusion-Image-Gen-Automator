@@ -160,6 +160,7 @@ class FusionEnvironment(FusionEnvironmentPort):
         component_ids = {}
         for record in records:
             occurrence_ids.setdefault(record["occurrence_id"], []).append(record)
+        for record in self._unique_component_records(records):
             component_ids.setdefault(record["component_id"], []).append(record)
         issues = []
         for reference in scene["assembly_state"]["occurrences"]:
@@ -167,6 +168,18 @@ class FusionEnvironment(FusionEnvironmentPort):
         for reference in scene["assembly_state"].get("components", []):
             self._reference_issue(issues, component_ids, reference["component_id"], reference["label"], "component")
         return issues
+
+    @staticmethod
+    def _unique_component_records(records):
+        unique = []
+        seen = set()
+        for record in records:
+            key = record["component_key"]
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(record)
+        return unique
 
     @staticmethod
     def _reference_issue(issues, index, identifier, label, kind):
