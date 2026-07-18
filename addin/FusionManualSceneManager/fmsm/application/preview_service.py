@@ -76,10 +76,10 @@ class PreviewService(object):
             "<article>",
             "<h2>%d. %s</h2>" % (index, _escape(metadata.get("title", "Untitled scene"))),
             "<p class=\"meta\">Status: %s | Scene ID: %s</p>" % (_escape(metadata.get("status", "draft")), _escape(entry["scene_id"])),
+            self._image_html(root, output.get("image_file", ""), "Rendered image"),
             _section("Description", metadata.get("description", "")),
             _section("Purpose", metadata.get("purpose", "")),
             _pre_section("Instructions", metadata.get("instructions_markdown", "")),
-            self._image_html(root, output.get("image_file", ""), "Rendered image"),
             "<p class=\"meta\">Image: %s<br>Thumbnail: %s</p>" % (_escape(output.get("image_file", "")), _escape(output.get("thumbnail_file", ""))),
             "</article>",
         ]

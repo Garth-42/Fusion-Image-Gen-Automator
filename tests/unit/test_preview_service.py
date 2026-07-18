@@ -85,6 +85,7 @@ def test_summary_builds_escaped_html_document_for_project_scenes(tmp_path):
     assert "Use bracket &amp; screw." in result["body_html"]
     assert "assets/generated/install-rail__" in result["body_html"]
     assert "data:image/png;base64,ZmFrZSBwbmc=" in result["body_html"]
+    assert result["body_html"].index("data:image/png;base64,ZmFrZSBwbmc=") < result["body_html"].index("Description")
     assert scene["scene_id"] in result["body_html"]
 
 
