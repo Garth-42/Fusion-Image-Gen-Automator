@@ -63,4 +63,4 @@ def test_scene_entries_reject_duplicates_and_unsafe_paths():
     manifest["project"]["scenes"].append({"scene_id": "9a3dd5f1-532e-4d82-b8d7-b04ccbfa73ae", "file": "scenes/../escape.yaml"})
 
     issues = validate_manifest(manifest)
-    assert [issue.path for issue in issues] == ["project.scenes.1.scene_id", "project.scenes.2.file"]
+    assert [issue.path for issue in issues] == ["project.scenes.1.scene_id", "project.scenes.1.file", "project.scenes.2.file"]

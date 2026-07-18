@@ -25,12 +25,18 @@ its connection-status line.
 | `SCHEMA_VERSION_MISSING` | YAML lacks schema version |
 | `SCHEMA_VERSION_UNSUPPORTED` | YAML version is newer or otherwise unsupported |
 | `YAML_PARSE_FAILED` | YAML cannot be safely parsed |
+| `SCENE_INVALID` | Scene YAML has an invalid schema-version-1 structure |
 | `SCENE_TITLE_INVALID` | Scene title is empty or longer than 200 characters |
 | `SCENE_STATUS_INVALID` | Scene status is not one of the schema-supported values |
 | `SCENE_TAGS_INVALID` | Scene tags are not a list of strings |
 | `SCENE_NOT_FOUND` | Requested scene ID is not present in the manifest |
 | `SCENE_FILE_EXISTS` | Generated scene YAML path already exists |
 | `SCENE_REORDER_INVALID` | Reorder request did not include each manifest scene exactly once |
+| `ASSEMBLY_STATE_INVALID` | Scene assembly state is not a valid mapping/list structure |
+| `VISIBILITY_INVALID` | Occurrence visibility state is not boolean |
+| `COMPONENT_ID_INVALID` | Component state references an invalid UUID |
+| `OPACITY_INVALID` | Component opacity is not a finite value between 0 and 1 |
+| `OUTPUT_INVALID` | Scene output settings are missing or outside supported ranges |
 | `SCENE_REFERENCE_MISSING` | Referenced Fusion entity is absent |
 | `DUPLICATE_OCCURRENCE_ID` | More than one occurrence uses the same UUID |
 | `DUPLICATE_COMPONENT_ID` | More than one component uses the same UUID |

@@ -82,7 +82,7 @@ class SceneStateService(object):
 
     @staticmethod
     def _validate_state(state):
-        scene = {"schema_version": 1, "scene": {"id": "00000000-0000-4000-8000-000000000001"}, "camera": state.get("camera", {}), "assembly_state": state.get("assembly_state", {})}
+        scene = {"schema_version": 1, "scene": {"id": "00000000-0000-4000-8000-000000000001", "title": "Captured preview", "status": "draft"}, "camera": state.get("camera", {}), "assembly_state": state.get("assembly_state", {}), "output": {"image_file": "assets/generated/preview.png", "thumbnail_file": "assets/thumbnails/preview.png", "width_px": 2400, "height_px": 1600, "thumbnail_width_px": 480, "thumbnail_height_px": 320, "transparent_background": True, "anti_alias": True}}
         issues = validate_scene(scene)
         if issues:
             issue = issues[0]

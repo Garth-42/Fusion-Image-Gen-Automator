@@ -47,9 +47,10 @@ class FakeFusion(object):
 def scene():
     return {
         "schema_version": 1,
-        "scene": {"id": "11111111-1111-4111-8111-111111111111"},
-        "camera": {"eye_cm": [1, 0, 0], "target_cm": [0, 0, 0], "up_vector": [0, 0, 1]},
-        "assembly_state": {"occurrences": []},
+        "scene": {"id": "11111111-1111-4111-8111-111111111111", "title": "State", "status": "draft"},
+        "camera": {"type": "orthographic", "eye_cm": [1, 0, 0], "target_cm": [0, 0, 0], "up_vector": [0, 0, 1], "extents_cm": {"width": 10, "height": 8}, "perspective_angle_rad": None},
+        "assembly_state": {"occurrences": [], "components": []},
+        "output": {"image_file": "assets/generated/state.png", "thumbnail_file": "assets/thumbnails/state.png", "width_px": 2400, "height_px": 1600, "thumbnail_width_px": 480, "thumbnail_height_px": 320, "transparent_background": True, "anti_alias": True},
     }
 
 
