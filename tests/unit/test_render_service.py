@@ -20,6 +20,10 @@ class FakeFusion(object):
         self.fail_export = False
         self.restore_error = None
         self.reference_issues = []
+        self.identity_record_calls = 0
+        self.validation_records = None
+        self.snapshot_records = None
+        self.apply_records = None
 
     def active_document(self):
         return {"name": "Assembly", "data_file_id": "urn:doc"}
@@ -37,14 +41,21 @@ class FakeFusion(object):
             "assembly_state": {"unlisted_occurrence_policy": "hide_and_warn", "occurrences": [], "components": []},
         }
 
-    def validate_scene_references(self, scene):
+    def identity_records(self):
+        self.identity_record_calls += 1
+        return [{"occurrence_handle": "occ-1", "component_handle": "component-1"}]
+
+    def validate_scene_references(self, scene, records=None):
+        self.validation_records = records
         return list(self.reference_issues)
 
-    def capture_session_state(self):
+    def capture_session_state(self, records=None):
+        self.snapshot_records = records
         return {"session": "before"}
 
-    def apply_scene_state(self, scene):
+    def apply_scene_state(self, scene, records=None):
         self.applied += 1
+        self.apply_records = records
         return {"warnings": [{"code": "UNLISTED_OCCURRENCE_HIDDEN", "label": "extra"}]}
 
     def refresh_viewport(self):
@@ -96,6 +107,9 @@ def test_render_exports_final_and_thumbnail_then_restores(tmp_path):
     assert fusion.exports[1][1:3] == (480, 320)
     assert yaml_store.project_path(root, result["image_file"]).read_text(encoding="utf-8") == "png"
     assert result["warnings"][0]["code"] == "UNLISTED_OCCURRENCE_HIDDEN"
+    assert fusion.identity_record_calls == 1
+    assert fusion.validation_records is fusion.snapshot_records
+    assert fusion.snapshot_records is fusion.apply_records
 
 
 def test_render_validates_references_before_mutating(tmp_path):
