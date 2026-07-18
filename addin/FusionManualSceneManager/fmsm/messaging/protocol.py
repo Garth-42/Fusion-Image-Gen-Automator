@@ -16,6 +16,7 @@ ALLOWED_ACTIONS = frozenset([
     "state.capture_current",
     "state.apply_captured",
     "state.restore",
+    "preview.summary",
     "scene.list",
     "scene.get",
     "scene.load",

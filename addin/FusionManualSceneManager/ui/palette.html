@@ -58,6 +58,7 @@
     <input id="scene-title" type="text" maxlength="200" placeholder="e.g. Install left DIN rail">
     <button id="create-scene" type="button" hidden>Create Scene from Current State</button>
     <button id="render-all-scenes" type="button" hidden>Render All Scenes</button>
+    <button id="preview-summary" type="button" hidden>Preview Summary</button>
     <ul id="scene-list" hidden></ul>
     <div id="scene-editor" hidden>
       <h3>Edit Selected Scene</h3>
@@ -125,6 +126,7 @@
     sceneTitle: document.getElementById("scene-title"),
     createScene: document.getElementById("create-scene"),
     renderAllScenes: document.getElementById("render-all-scenes"),
+    previewSummary: document.getElementById("preview-summary"),
     sceneList: document.getElementById("scene-list"),
     sceneEditor: document.getElementById("scene-editor"),
     selectedSceneFile: document.getElementById("selected-scene-file"),
@@ -308,7 +310,7 @@
     elements.refresh.disabled = busy;
     elements.ensureIds.disabled = busy;
     elements.repairIds.disabled = busy;
-    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy; elements.renderAllScenes.disabled = busy; elements.saveScene.disabled = busy; elements.updateSceneState.disabled = busy; elements.moveSceneUp.disabled = busy; elements.moveSceneDown.disabled = busy;
+    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy; elements.renderAllScenes.disabled = busy; elements.previewSummary.disabled = busy; elements.saveScene.disabled = busy; elements.updateSceneState.disabled = busy; elements.moveSceneUp.disabled = busy; elements.moveSceneDown.disabled = busy;
   }
 
   // ---- rendering -------------------------------------------------------
@@ -331,6 +333,7 @@
     if (!project) {
       elements.createScene.hidden = true;
       elements.renderAllScenes.hidden = true;
+      elements.previewSummary.hidden = true;
       elements.sceneTitle.hidden = true;
       elements.sceneList.hidden = true;
       elements.sceneEditor.hidden = true;
@@ -342,10 +345,12 @@
     currentProject = project;
     elements.createScene.hidden = false;
     elements.renderAllScenes.hidden = false;
+    elements.previewSummary.hidden = false;
     elements.sceneTitle.hidden = false;
     if (project.scenes.length === 0) {
       elements.sceneList.hidden = true;
       elements.renderAllScenes.hidden = true;
+      elements.previewSummary.hidden = true;
       elements.sceneEditor.hidden = true;
       selectedSceneId = null;
       elements.sceneStatus.textContent = "No scenes yet. Capture the current Fusion state to create one.";
@@ -643,6 +648,24 @@
     }, "Applying, exporting, and restoring scene…");
   }
 
+  function previewSummary() {
+    sendRequest("preview.summary", {}, function (response) {
+      if (response.ok) {
+        var popup = window.open("", "fmsm-summary-preview");
+        if (!popup) {
+          elements.feedback.textContent = "Preview popup was blocked.";
+          return;
+        }
+        popup.document.open();
+        popup.document.write(response.result.html);
+        popup.document.close();
+        elements.feedback.textContent = "Preview opened for " + response.result.title + ".";
+      } else {
+        elements.feedback.textContent = describeError(response);
+      }
+    }, "Building scene summary preview…");
+  }
+
   function renderAllScenes() {
     sendRequest("scene.render_all", {}, function (response) {
       if (response.ok) {
@@ -661,6 +684,7 @@
   elements.saveScene.addEventListener("click", saveSelectedScene);
   elements.updateSceneState.addEventListener("click", updateSelectedSceneState);
   elements.renderAllScenes.addEventListener("click", renderAllScenes);
+  elements.previewSummary.addEventListener("click", previewSummary);
   elements.moveSceneUp.addEventListener("click", function () { moveSelectedScene(-1); });
   elements.moveSceneDown.addEventListener("click", function () { moveSelectedScene(1); });
 
