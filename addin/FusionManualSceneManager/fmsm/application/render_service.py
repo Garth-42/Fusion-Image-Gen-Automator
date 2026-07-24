@@ -54,6 +54,12 @@ class RenderService(object):
             self._fusion.refresh_viewport()
             self._fusion.export_viewport_png(str(final_path), output["width_px"], output["height_px"], output.get("transparent_background", True), output.get("anti_alias", True))
             self._fusion.export_viewport_png(str(thumbnail_path), output["thumbnail_width_px"], output["thumbnail_height_px"], output.get("transparent_background", True), output.get("anti_alias", True))
+            # Fusion's image export can report success while writing nothing —
+            # for example into a read-only output folder — so a returned "ok" is
+            # not proof of a file. Confirm both images actually landed on disk;
+            # otherwise the palette would show a success with no render behind it.
+            self._require_written(final_path)
+            self._require_written(thumbnail_path)
         except ServiceError:
             raise
         except Exception as error:
@@ -70,6 +76,18 @@ class RenderService(object):
             "thumbnail_file": output.get("thumbnail_file"),
             "warnings": (apply_result or {}).get("warnings", []),
         }
+
+    @staticmethod
+    def _require_written(path):
+        try:
+            written = path.is_file() and path.stat().st_size > 0
+        except OSError:
+            written = False
+        if not written:
+            raise ServiceError(
+                "RENDER_FAILED",
+                "Fusion reported success but no image was written to %s. Confirm the output folder is writable." % path,
+            )
 
     def _require_project(self):
         document = self._fusion.active_document()

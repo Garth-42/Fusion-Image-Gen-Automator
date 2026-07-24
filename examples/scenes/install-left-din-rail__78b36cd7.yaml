@@ -47,6 +47,7 @@ assembly_state:
       label: Backplate:1
       part_number: EBOX-BACKPLATE
       visible: true
+      opacity: 0.35
       transform_matrix_cm:
         - 1.0
         - 0.0
@@ -68,6 +69,7 @@ assembly_state:
       label: Left DIN Rail:1
       part_number: RAIL-DIN-200
       visible: true
+      opacity: 1.0
       transform_matrix_cm:
         - 1.0
         - 0.0
@@ -88,10 +90,8 @@ assembly_state:
   components:
     - component_id: 7e4225a8-9233-48f2-8a75-535659a21cd0
       label: Backplate
-      opacity: 0.35
     - component_id: 591d21b4-2915-4dd3-a266-8e08f9bd41fa
       label: Left DIN Rail
-      opacity: 1.0
 output:
   image_file: assets/generated/install-left-din-rail__78b36cd7.png
   thumbnail_file: assets/thumbnails/install-left-din-rail__78b36cd7.png
