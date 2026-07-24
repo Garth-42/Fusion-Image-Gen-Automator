@@ -89,6 +89,13 @@ def test_document_forces_repaints_so_it_cannot_stay_blank():
     assert "function forceRepaint" in html
     assert "function scheduleRepaint" in html
     assert "requestAnimationFrame" in html
+    # A compositor-only nudge (opacity alone) is coalesced away by the Qt
+    # WebEngine host without invalidating the native surface, so the repaint
+    # must also force a real reflow — the same thing collapsing/expanding a
+    # panel does. Pin that layout nudge so it cannot regress to opacity-only.
+    force_repaint = html[html.index("function forceRepaint"):html.index("function scheduleRepaint")]
+    assert "marginBottom" in force_repaint
+    assert "offsetHeight" in force_repaint
     # The repaint must fire after every response so a document switch cannot
     # leave a stale document line on screen even after Refresh.
     handle_raw = html[html.index("function handleRaw"):html.index("window.fusionJavaScriptHandler")]

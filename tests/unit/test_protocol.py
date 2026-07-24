@@ -82,3 +82,12 @@ def test_unexpected_failure_is_answered_not_raised(monkeypatch):
     assert response["ok"] is False
     assert response["error"]["code"] == "INTERNAL_ERROR"
     assert response["request_id"] == NULL_REQUEST_ID
+    # The message must name the actual failure instead of an opaque catch-all,
+    # and details must carry the traceback so a bug is diagnosable from the
+    # palette rather than vanishing behind "unexpected error".
+    assert "RuntimeError" in response["error"]["message"]
+    assert "handler bug" in response["error"]["message"]
+    details = response["error"]["details"]
+    assert details["exception"] == "RuntimeError"
+    assert details["detail"] == "handler bug"
+    assert "RuntimeError" in details["traceback"]

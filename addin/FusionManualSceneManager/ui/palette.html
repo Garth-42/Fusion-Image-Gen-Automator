@@ -183,14 +183,30 @@
 
   function forceRepaint() {
     var root = document.documentElement;
-    if (!root || document.body === null) { return; }
-    // Flush any pending layout, then flip opacity by an imperceptible amount to
-    // force two distinct composited frames. Opacity is used deliberately: it
-    // repaints the whole document without moving layout, so scroll position and
-    // focus are preserved even on a 200-scene list.
-    void document.body.offsetHeight;
+    var body = document.body;
+    if (!root || body === null) { return; }
+    // Flush any pending layout so the nudges below register as a fresh frame.
+    void body.offsetHeight;
+    // Two nudges applied together and reverted on the next frame, so the host
+    // presents two distinct frames of the settled DOM.
+    //
+    // 1) Opacity: cheap, and enough on hosts that repaint on any composited
+    //    change. It is compositor-only, though, so some hosts (notably the Qt
+    //    WebEngine palette browser) coalesce it away without ever invalidating
+    //    the native surface — which is why an opacity flip alone left the window
+    //    blank until the user collapsed/expanded a panel.
+    // 2) Layout reflow: that manual workaround is a *resize*, so reproduce a
+    //    resize. Grow the body by one pixel at the very bottom and force the
+    //    reflow synchronously — a genuine layout change the host cannot skip,
+    //    placed where it neither moves the scroll position nor is visible.
     root.style.opacity = "0.999";
-    raf(function () { root.style.opacity = ""; });
+    var priorMarginBottom = body.style.marginBottom;
+    body.style.marginBottom = "1px";
+    void body.offsetHeight;
+    raf(function () {
+      root.style.opacity = "";
+      body.style.marginBottom = priorMarginBottom;
+    });
   }
 
   function scheduleRepaint() {

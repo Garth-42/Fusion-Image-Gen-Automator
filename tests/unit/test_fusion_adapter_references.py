@@ -136,9 +136,9 @@ def test_apply_scene_state_batches_transforms_and_sets_per_occurrence_opacity(mo
     batched_occurrences, batched_transforms, ignore_joints = root.transform_calls[0]
     assert batched_occurrences == [occ_a, occ_b]
     assert len(batched_transforms) == 2 and ignore_joints is True
-    # Opacity lands on each occurrence's assembly-context proxy, not the native.
-    assert occ_a.component.createForAssemblyContext(occ_a).opacity == 0.4
-    assert occ_b.component.createForAssemblyContext(occ_b).opacity == 0.9
+    # Opacity is applied through the documented Component.opacity override.
+    assert occ_a.component.opacity == 0.4
+    assert occ_b.component.opacity == 0.9
     assert result["warnings"] == []
 
 
@@ -163,7 +163,43 @@ def test_apply_scene_state_falls_back_to_legacy_component_opacity(monkeypatch):
 
     environment.apply_scene_state(scene_state)
 
-    assert occ.component.createForAssemblyContext(occ).opacity == 0.3
+    assert occ.component.opacity == 0.3
+
+
+def test_capture_and_restore_session_state_round_trip_opacity_via_component(monkeypatch):
+    # Guards the state-restoration path the field report found broken: capture
+    # and restore read/write opacity on every occurrence, and did so through a
+    # Component method that does not exist. The mock Component below has no
+    # createForAssemblyContext, so this round-trip only passes on valid API use.
+    adapter = _adapter_module(monkeypatch)
+    occ_a, occ_b = _Occurrence(), _Occurrence()
+    occ_a.isLightBulbOn, occ_a.transform2, occ_a.component.opacity = True, _StubTransform(), 0.25
+    occ_b.isLightBulbOn, occ_b.transform2, occ_b.component.opacity = False, _StubTransform(), 0.5
+    environment = fake_environment(adapter, [
+        record("11111111-1111-4111-8111-111111111111", occ_a, "comp-a", "token-a"),
+        record("22222222-2222-4222-8222-222222222222", occ_b, "comp-b", "token-b"),
+    ])
+    app = _FakeApp()
+    environment._app = lambda: app
+    root = _RootComponent()
+    environment._root_component = lambda: root
+
+    snapshot = environment.capture_session_state()
+
+    # Opacity is captured from each occurrence's component override.
+    assert [entry[3] for entry in snapshot["occurrences"]] == [0.25, 0.5]
+    assert snapshot["camera"] == "camera-sentinel"
+
+    # Disturb the live state, then prove restore puts every value back.
+    occ_a.component.opacity, occ_b.component.opacity = 1.0, 1.0
+    occ_a.isLightBulbOn, occ_b.isLightBulbOn = False, True
+    app.activeViewport.camera = "other-camera"
+    environment.restore_session_state(snapshot)
+
+    assert occ_a.component.opacity == 0.25 and occ_b.component.opacity == 0.5
+    assert occ_a.isLightBulbOn is True and occ_b.isLightBulbOn is False
+    assert len(root.transform_calls) == 1
+    assert app.activeViewport.camera == "camera-sentinel"
 
 
 def test_export_viewport_png_rejects_a_reported_save_that_wrote_no_file(monkeypatch, tmp_path):
@@ -184,19 +220,15 @@ def test_export_viewport_png_rejects_a_reported_save_that_wrote_no_file(monkeypa
         environment.export_viewport_png(str(target), 2400, 1600, True, True)
 
 
-class _OpacityProxy(object):
+class _NativeComponent(object):
+    """Mirrors Fusion's Component: a read/write ``opacity`` override and,
+    deliberately, no ``createForAssemblyContext``. That method does not exist on
+    Component in the live API, so omitting it here makes any reintroduced call
+    raise ``AttributeError`` in these tests -- the exact field failure guarded.
+    """
+
     def __init__(self):
         self.opacity = 1.0
-
-
-class _NativeComponent(object):
-    """Hands back a stable per-occurrence proxy, like Component in Fusion."""
-
-    def __init__(self):
-        self._proxies = {}
-
-    def createForAssemblyContext(self, occurrence):
-        return self._proxies.setdefault(id(occurrence), _OpacityProxy())
 
 
 class _Occurrence(object):
@@ -213,6 +245,21 @@ class _RootComponent(object):
     def transformOccurrences(self, occurrences, transforms, ignore_joints):
         self.transform_calls.append((list(occurrences), list(transforms), ignore_joints))
         return True
+
+
+class _StubTransform(object):
+    def copy(self):
+        return self
+
+
+class _FakeViewport(object):
+    def __init__(self):
+        self.camera = "camera-sentinel"
+
+
+class _FakeApp(object):
+    def __init__(self):
+        self.activeViewport = _FakeViewport()
 
 
 class _MatrixFactory(object):

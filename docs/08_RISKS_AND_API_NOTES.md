@@ -5,7 +5,7 @@
 | Risk | Impact | First-deliverable mitigation |
 |---|---|---|
 | Scene transforms modify the active design state | Accidental changes or dirty document | Require dedicated documentation assembly; capture and restore session state; never auto-save |
-| Opacity overrides live on per-occurrence proxies, not the shared native component | Authored per-instance opacity is not replayed | Capture and restore each occurrence's assembly-context opacity override via component proxies; confirm in the fixture pass |
+| The Fusion API models opacity as a component override, with no writable per-occurrence property | Two instances of one component cannot hold different authored opacities through this API | Capture and restore opacity via `Component.opacity`; document that independent per-instance opacity is out of scope for the first deliverable |
 | IDs duplicate after copy/paste | Ambiguous scene references | UUID scan before apply/render; block on duplicate; explicit repair workflow |
 | Browser names change | Broken name-based references | UUID attributes are identity; names are labels only |
 | External referenced components change structure | Missing scene references | Validate before mutation; show broken references; manual recapture in MVP |
@@ -54,7 +54,7 @@ Use `isLightBulbOn` for replay. `isVisible` is effective read-only visibility an
 
 ### Opacity
 
-Opacity overrides are per-occurrence and live on the component proxy in each occurrence's assembly context, not on the shared native component returned by `Occurrence.component`. Capture and restore opacity through `Component.createForAssemblyContext(occurrence).opacity` so per-instance overrides round-trip. `Occurrence.visibleOpacity` is the combined inherited result and is read-only, so it is for diagnostics only, not restoration.
+Opacity is a component-level override in the Fusion API. Capture and restore it through `Component.opacity` (reached as `Occurrence.component.opacity`), which is read-write and round-trips symmetrically. There is **no** writable `Occurrence.opacity` property, and `Component` has **no** `createForAssemblyContext` method — an earlier attempt to reach a per-occurrence proxy via `Occurrence.component.createForAssemblyContext(occurrence).opacity` raised `AttributeError` on every occurrence and broke capture, render, apply, and restore. `Occurrence.visibleOpacity` is the combined inherited result and is read-only, so it is for diagnostics only, not restoration. A consequence is that two occurrences of the same component share one opacity value; independent per-instance opacity (a body-proxy concern) is out of scope for the first deliverable.
 
 ### Transforms in assembly context
 
