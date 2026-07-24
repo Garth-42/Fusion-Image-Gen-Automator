@@ -30,6 +30,10 @@ def _finite_numbers(values):
     return isinstance(values, list) and all(isinstance(value, (int, float)) and math.isfinite(value) for value in values)
 
 
+def _is_valid_opacity(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and 0 <= value <= 1
+
+
 def _scene_issue(code, message, path):
     return ValidationIssue(code, message, path)
 
@@ -108,6 +112,9 @@ def validate_scene(scene):
             issues.append(_scene_issue("OCCURRENCE_ID_INVALID", "Occurrence ID must be a UUID.", "assembly_state.occurrences.%d" % index))
         if not isinstance(occurrence.get("visible"), bool):
             issues.append(_scene_issue("VISIBILITY_INVALID", "Occurrence visible must be boolean.", "assembly_state.occurrences.%d.visible" % index))
+        opacity = occurrence.get("opacity")
+        if opacity is not None and not _is_valid_opacity(opacity):
+            issues.append(_scene_issue("OPACITY_INVALID", "Occurrence opacity must be a finite value between 0 and 1.", "assembly_state.occurrences.%d.opacity" % index))
 
     components = assembly.get("components", [])
     if not isinstance(components, list):
@@ -119,9 +126,11 @@ def validate_scene(scene):
             continue
         if not _is_uuid(component.get("component_id")):
             issues.append(_scene_issue("COMPONENT_ID_INVALID", "Component ID must be a UUID.", "assembly_state.components.%d" % index))
+        # Opacity is stored per occurrence now; a component-level value is only
+        # present in scenes written before that change, so validate it if there.
         opacity = component.get("opacity")
-        if not isinstance(opacity, (int, float)) or isinstance(opacity, bool) or not math.isfinite(opacity) or opacity < 0 or opacity > 1:
-            issues.append(_scene_issue("OPACITY_INVALID", "Component opacity must be between 0 and 1.", "assembly_state.components.%d.opacity" % index))
+        if opacity is not None and not _is_valid_opacity(opacity):
+            issues.append(_scene_issue("OPACITY_INVALID", "Component opacity must be a finite value between 0 and 1.", "assembly_state.components.%d.opacity" % index))
 
     output = scene.get("output")
     if not isinstance(output, dict):

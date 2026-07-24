@@ -5,7 +5,7 @@
 | Risk | Impact | First-deliverable mitigation |
 |---|---|---|
 | Scene transforms modify the active design state | Accidental changes or dirty document | Require dedicated documentation assembly; capture and restore session state; never auto-save |
-| Repeated component opacity cannot be independently replayed | Ghosting differs from authored view | Capability validation; clear warning/error; no custom-graphics workaround in MVP |
+| Opacity overrides live on per-occurrence proxies, not the shared native component | Authored per-instance opacity is not replayed | Capture and restore each occurrence's assembly-context opacity override via component proxies; confirm in the fixture pass |
 | IDs duplicate after copy/paste | Ambiguous scene references | UUID scan before apply/render; block on duplicate; explicit repair workflow |
 | Browser names change | Broken name-based references | UUID attributes are identity; names are labels only |
 | External referenced components change structure | Missing scene references | Validate before mutation; show broken references; manual recapture in MVP |
@@ -54,7 +54,11 @@ Use `isLightBulbOn` for replay. `isVisible` is effective read-only visibility an
 
 ### Opacity
 
-Use supported component/body opacity properties only. The adapter must report unsupported external, root, repeated-instance, or context-specific cases rather than inventing behavior.
+Opacity overrides are per-occurrence and live on the component proxy in each occurrence's assembly context, not on the shared native component returned by `Occurrence.component`. Capture and restore opacity through `Component.createForAssemblyContext(occurrence).opacity` so per-instance overrides round-trip. `Occurrence.visibleOpacity` is the combined inherited result and is read-only, so it is for diagnostics only, not restoration.
+
+### Transforms in assembly context
+
+Replay occurrence transforms with `rootComponent.transformOccurrences(occurrences, transforms, ignoreJoints=True)`, not per-occurrence `transform2` assignment. Setting `transform2` one occurrence at a time drags nested children when their parent moves; the batch call flattens the assembly and applies every transform in root context at once.
 
 ### Rendering
 

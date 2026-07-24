@@ -61,6 +61,23 @@ def test_scene_camera_occurrence_and_component_state_are_validated():
     assert "OPACITY_INVALID" in codes
 
 
+def test_occurrence_opacity_is_optional_but_validated_when_present():
+    scene = _valid_scene()
+    # Occurrences in _valid_scene() carry no opacity; that must stay valid so
+    # scenes written before per-occurrence opacity still load.
+    assert validate_scene(scene) == []
+    scene["assembly_state"]["occurrences"][0]["opacity"] = 0.5
+    assert validate_scene(scene) == []
+    scene["assembly_state"]["occurrences"][0]["opacity"] = 1.5
+    assert "OPACITY_INVALID" in _codes(scene)
+
+
+def test_component_opacity_is_now_optional():
+    scene = _valid_scene()
+    del scene["assembly_state"]["components"][0]["opacity"]
+    assert validate_scene(scene) == []
+
+
 def test_perspective_scene_requires_positive_angle():
     scene = _valid_scene()
     scene["camera"]["type"] = "perspective"

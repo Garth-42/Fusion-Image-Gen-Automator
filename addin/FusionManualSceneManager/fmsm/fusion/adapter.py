@@ -69,17 +69,52 @@ class FusionEnvironment(FusionEnvironmentPort):
     def write_project_id(self, project_id):
         self._document().attributes.add(ATTRIBUTE_GROUP, PROJECT_ID_ATTRIBUTE, project_id)
 
+    def _root_component(self):
+        design = self._app().activeProduct
+        if design is None or not hasattr(design, "rootComponent"):
+            raise RuntimeError("The active document does not contain a Fusion design.")
+        return design.rootComponent
+
+    @staticmethod
+    def _occurrence_opacity(occurrence):
+        """Read one occurrence's own opacity override.
+
+        Opacity overrides are per-occurrence and live on the component *proxy* in
+        that occurrence's assembly context, not on the shared native component
+        returned by ``occurrence.component``. Reading the native value misses
+        instance overrides set in the browser, which is why captured opacity did
+        not round-trip. ``visibleOpacity`` is the combined inherited result, not
+        the occurrence's own override, so it is not used here.
+        """
+        return occurrence.component.createForAssemblyContext(occurrence).opacity
+
+    @staticmethod
+    def _set_occurrence_opacity(occurrence, opacity):
+        occurrence.component.createForAssemblyContext(occurrence).opacity = opacity
+
+    def _replay_transforms(self, occurrences, transforms, failure_message):
+        """Apply occurrence transforms in one root-context batch.
+
+        Setting ``transform2`` one occurrence at a time corrupts nested children:
+        moving a parent rigidly drags its children, so a later per-child set
+        fights that move. ``transformOccurrences`` flattens the assembly and
+        applies every transform relative to the root at once, which is the
+        documented way to replay nested occurrences (docs 8.3; ADR-0004).
+        ``ignoreJoints=True`` because scenes position by transform, not joints.
+        """
+        if not occurrences:
+            return
+        if not self._root_component().transformOccurrences(occurrences, transforms, True):
+            raise RuntimeError(failure_message)
+
     def identity_records(self):
         """Return root-context occurrence/component identity data.
 
         Fusion entity objects are kept only as transient handles used by this
         process.  Persistent identity is always the UUID in the FMSM attribute.
         """
-        design = self._app().activeProduct
-        if design is None or not hasattr(design, "rootComponent"):
-            raise RuntimeError("The active document does not contain a Fusion design.")
         records = []
-        for occurrence in design.rootComponent.allOccurrences:
+        for occurrence in self._root_component().allOccurrences:
             component = occurrence.component
             records.append({
                 "occurrence_handle": occurrence,
@@ -112,17 +147,10 @@ class FusionEnvironment(FusionEnvironmentPort):
             records = self.identity_records()
         viewport = self._app().activeViewport
         occurrences = []
-        components = []
-        seen_components = set()
         for record in records:
             occurrence = record["occurrence_handle"]
-            occurrences.append((occurrence, occurrence.isLightBulbOn, occurrence.transform2.copy()))
-            key = record["component_key"]
-            if key not in seen_components:
-                seen_components.add(key)
-                component = record["component_handle"]
-                components.append((component, component.opacity))
-        return {"camera": viewport.camera, "occurrences": occurrences, "components": components}
+            occurrences.append((occurrence, occurrence.isLightBulbOn, occurrence.transform2.copy(), self._occurrence_opacity(occurrence)))
+        return {"camera": viewport.camera, "occurrences": occurrences}
 
     def capture_scene_state(self):
         """Capture the current view as primitive data suitable for a scene file."""
@@ -140,11 +168,12 @@ class FusionEnvironment(FusionEnvironmentPort):
             occurrences.append({
                 "occurrence_id": record["occurrence_id"], "label": record["label"],
                 "part_number": record["part_number"], "visible": occurrence.isLightBulbOn,
+                "opacity": self._occurrence_opacity(occurrence),
                 "transform_matrix_cm": list(occurrence.transform2.asArray()),
             })
             if record["component_key"] not in seen_components:
                 seen_components.add(record["component_key"])
-                components.append({"component_id": record["component_id"], "label": record["component_label"], "opacity": record["component_handle"].opacity})
+                components.append({"component_id": record["component_id"], "label": record["component_label"]})
         return {
             "camera": {
                 "type": camera_type,
@@ -207,38 +236,51 @@ class FusionEnvironment(FusionEnvironmentPort):
         if records is None:
             records = self.identity_records()
         occurrences = {record["occurrence_id"]: record for record in records}
-        components = {}
-        for record in records:
-            components.setdefault(record["component_id"], record)
+        present_components = set(record["component_id"] for record in records)
+        # Scenes written before opacity moved onto occurrences stored it per
+        # component; fall back to that so their authored look still replays.
+        legacy_opacity = dict(
+            (reference["component_id"], reference["opacity"])
+            for reference in scene["assembly_state"].get("components", [])
+            if reference.get("opacity") is not None
+        )
         listed = set()
+        move_occurrences = []
+        move_transforms = []
         for reference in scene["assembly_state"]["occurrences"]:
             record = occurrences[reference["occurrence_id"]]
             occurrence = record["occurrence_handle"]
             matrix = adsk.core.Matrix3D.create()
             matrix.setWithArray(reference["transform_matrix_cm"])
-            occurrence.transform2 = matrix
+            move_occurrences.append(occurrence)
+            move_transforms.append(matrix)
             occurrence.isLightBulbOn = reference["visible"]
+            opacity = reference.get("opacity")
+            if opacity is None:
+                opacity = legacy_opacity.get(record["component_id"], 1.0)
+            self._set_occurrence_opacity(occurrence, opacity)
             listed.add(reference["occurrence_id"])
+        self._replay_transforms(move_occurrences, move_transforms, "Fusion could not replay the scene occurrence transforms.")
         warnings = []
         for record in records:
             if record["occurrence_id"] not in listed:
                 record["occurrence_handle"].isLightBulbOn = False
                 warnings.append({"code": "UNLISTED_OCCURRENCE_HIDDEN", "label": record["label"]})
         for reference in scene["assembly_state"].get("components", []):
-            record = components.get(reference["component_id"])
-            if record is None:
+            if reference["component_id"] not in present_components:
                 warnings.append({"code": "COMPONENT_REFERENCE_MISSING", "label": reference["label"]})
-                continue
-            record["component_handle"].opacity = reference["opacity"]
         self._apply_camera(scene["camera"])
         return {"warnings": warnings}
 
     def restore_session_state(self, snapshot):
-        for occurrence, visible, transform in snapshot["occurrences"]:
-            occurrence.transform2 = transform
+        move_occurrences = []
+        move_transforms = []
+        for occurrence, visible, transform, opacity in snapshot["occurrences"]:
             occurrence.isLightBulbOn = visible
-        for component, opacity in snapshot["components"]:
-            component.opacity = opacity
+            self._set_occurrence_opacity(occurrence, opacity)
+            move_occurrences.append(occurrence)
+            move_transforms.append(transform)
+        self._replay_transforms(move_occurrences, move_transforms, "Fusion could not restore the pre-scene occurrence transforms.")
         self._app().activeViewport.camera = snapshot["camera"]
 
     def refresh_viewport(self):

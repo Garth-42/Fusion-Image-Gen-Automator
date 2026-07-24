@@ -236,6 +236,11 @@
                 "items": {
                   "type": "number"
                 }
+              },
+              "opacity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             }
           }
@@ -247,8 +252,7 @@
             "additionalProperties": false,
             "required": [
               "component_id",
-              "label",
-              "opacity"
+              "label"
             ],
             "properties": {
               "component_id": {
