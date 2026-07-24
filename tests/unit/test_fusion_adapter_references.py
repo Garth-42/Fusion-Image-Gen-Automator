@@ -3,6 +3,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 ADDIN_ROOT = Path(__file__).resolve().parents[2] / "addin" / "FusionManualSceneManager"
 if str(ADDIN_ROOT) not in sys.path:
     sys.path.insert(0, str(ADDIN_ROOT))
@@ -103,6 +105,24 @@ def test_apply_scene_state_warns_and_skips_missing_component_opacity(monkeypatch
     result = environment.apply_scene_state(scene_state)
 
     assert result["warnings"] == [{"code": "COMPONENT_REFERENCE_MISSING", "label": "Ball"}]
+
+
+def test_export_viewport_png_rejects_a_reported_save_that_wrote_no_file(monkeypatch, tmp_path):
+    adapter = _adapter_module(monkeypatch)
+
+    class FakeViewport(object):
+        def saveAsImageFile(self, path, width, height):
+            return True  # reports success but writes nothing, as a read-only folder does
+
+    class FakeApp(object):
+        activeViewport = FakeViewport()
+
+    adapter.adsk.core.Application = type("Application", (), {"get": staticmethod(lambda: FakeApp())})
+    environment = adapter.FusionEnvironment()
+    target = tmp_path / "generated" / "final.png"
+
+    with pytest.raises(RuntimeError, match="none was written"):
+        environment.export_viewport_png(str(target), 2400, 1600, True, True)
 
 
 class _Occurrence(object):

@@ -166,6 +166,42 @@
     connectionLine.textContent = "Palette script error: " + message;
   };
 
+  // ---- forced repaint --------------------------------------------------
+  //
+  // Some palette host builds (notably the Qt WebEngine browser) present their
+  // first frame before layout settles and then do not repaint on DOM mutation
+  // alone. The window stays blank apart from a sliver of the first paint —
+  // testers saw only the title and the word "Fusion" — until an unrelated
+  // resize (collapsing/expanding a section, minimizing and maximizing) forces
+  // the native surface to invalidate. The same stale surface is why switching
+  // the active document leaves the old document line on screen even after
+  // Refresh. Pushing a fresh composited frame from script reproduces that
+  // invalidation so the palette paints without any manual nudge.
+
+  var raf = window.requestAnimationFrame || function (callback) { return window.setTimeout(callback, 16); };
+  var repaintQueued = false;
+
+  function forceRepaint() {
+    var root = document.documentElement;
+    if (!root || document.body === null) { return; }
+    // Flush any pending layout, then flip opacity by an imperceptible amount to
+    // force two distinct composited frames. Opacity is used deliberately: it
+    // repaints the whole document without moving layout, so scroll position and
+    // focus are preserved even on a 200-scene list.
+    void document.body.offsetHeight;
+    root.style.opacity = "0.999";
+    raf(function () { root.style.opacity = ""; });
+  }
+
+  function scheduleRepaint() {
+    if (repaintQueued) { return; }
+    repaintQueued = true;
+    raf(function () {
+      repaintQueued = false;
+      forceRepaint();
+    });
+  }
+
   // ---- transport -------------------------------------------------------
 
   function transmit(action, payload, requestId) {
@@ -206,6 +242,9 @@
     } else {
       handleRequestResponse(response);
     }
+    // Every response updates the DOM (status, scene list, document line); force
+    // the paint the host would otherwise skip.
+    scheduleRepaint();
   }
 
   // Python-initiated pushes arrive here (none are sent today). The handler
@@ -240,6 +279,7 @@
     settled = true;
     stopRetrying();
     connectionLine.textContent = text;
+    scheduleRepaint();
   }
 
   // Error responses settle the handshake even when their request id does not
@@ -482,6 +522,10 @@
 
   function requestIdentityStatus() {
     sendRequest("identity.status", {}, function (response) {
+      // The identity check is a background refresh fired after project status,
+      // not a user action; clear the shared feedback line so its busy text
+      // ("Checking stable IDs…") does not linger on screen after it finishes.
+      elements.feedback.textContent = "";
       if (response.ok) {
         renderIdentity(response.result);
       } else {
@@ -729,6 +773,13 @@
   // budget is spent.
   attemptConnection();
   retryTimer = window.setInterval(attemptConnection, RETRY_INTERVAL_MS);
+
+  // The blank-on-open failure happens before the first response can arrive, so
+  // nudge a few times across the first second to catch whichever frame the host
+  // finally makes the native surface paintable on.
+  [0, 60, 150, 350, 700].forEach(function (delay) {
+    window.setTimeout(scheduleRepaint, delay);
+  });
 }());
 </script>
 </body>

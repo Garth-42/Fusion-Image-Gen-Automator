@@ -79,6 +79,32 @@ def test_document_contains_state_preview_controls():
         assert action in html
 
 
+def test_document_forces_repaints_so_it_cannot_stay_blank():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # A host that presents its first frame before layout settles and never
+    # repaints on DOM mutation leaves the palette blank until an unrelated
+    # resize. The page must invalidate its own surface instead of relying on
+    # the user to nudge it.
+    assert "function forceRepaint" in html
+    assert "function scheduleRepaint" in html
+    assert "requestAnimationFrame" in html
+    # The repaint must fire after every response so a document switch cannot
+    # leave a stale document line on screen even after Refresh.
+    handle_raw = html[html.index("function handleRaw"):html.index("window.fusionJavaScriptHandler")]
+    assert "scheduleRepaint()" in handle_raw
+
+
+def test_identity_status_clears_the_shared_feedback_line():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    body = html[html.index("function requestIdentityStatus"):html.index("function handleMutationResponse")]
+    # The busy text is shown while the background check runs; it must be cleared
+    # when the check settles so it does not read as a stuck operation.
+    assert "Checking stable IDs" in body
+    assert 'elements.feedback.textContent = ""' in body
+
+
 def test_controller_url_points_at_the_document(monkeypatch):
     controller_module = _palette_controller(monkeypatch)
 

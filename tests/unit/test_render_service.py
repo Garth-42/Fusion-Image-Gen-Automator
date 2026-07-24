@@ -18,6 +18,7 @@ class FakeFusion(object):
         self.restored = 0
         self.applied = 0
         self.fail_export = False
+        self.silent_export = False
         self.restore_error = None
         self.reference_issues = []
         self.identity_record_calls = 0
@@ -65,6 +66,10 @@ class FakeFusion(object):
         if self.fail_export:
             raise RuntimeError("disk full")
         self.exports.append((path, width_px, height_px, transparent_background, anti_alias))
+        if self.silent_export:
+            # Model Fusion reporting a successful save while writing nothing,
+            # e.g. exporting into a read-only output folder.
+            return
         with open(path, "w", encoding="utf-8") as target:
             target.write("png")
 
@@ -135,6 +140,19 @@ def test_render_restores_after_export_failure(tmp_path):
     assert error.value.code == "RENDER_FAILED"
     assert fusion.applied == 1
     assert fusion.restored == 1
+
+
+def test_render_fails_loudly_when_export_writes_no_file(tmp_path):
+    service, fusion, root, scene = _services(tmp_path)
+    fusion.silent_export = True
+
+    with pytest.raises(ServiceError) as error:
+        service.render({"scene_id": scene["scene_id"]})
+
+    assert error.value.code == "RENDER_FAILED"
+    assert fusion.applied == 1
+    assert fusion.restored == 1
+    assert not yaml_store.project_path(root, scene["output"]["image_file"]).exists()
 
 
 def test_restore_failure_is_reported(tmp_path):

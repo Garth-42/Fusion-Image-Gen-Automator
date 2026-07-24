@@ -1,6 +1,8 @@
 """Fusion implementation of the application-layer environment port."""
 from __future__ import absolute_import
 
+from pathlib import Path
+
 import adsk.core
 
 from fmsm.application.ports import FusionEnvironmentPort
@@ -250,6 +252,12 @@ class FusionEnvironment(FusionEnvironmentPort):
             viewport.isAntiAliasingEnabled = anti_alias
         if not viewport.saveAsImageFile(path, width_px, height_px):
             raise RuntimeError("Fusion did not save the viewport image.")
+        # A True return is not proof of a file: exports into a read-only folder
+        # have been observed to report success while writing nothing. Confirm the
+        # file exists and is non-empty so the failure cannot pass silently.
+        written = Path(path)
+        if not written.is_file() or written.stat().st_size == 0:
+            raise RuntimeError("Fusion reported a saved image but none was written to %s." % path)
 
     def _apply_camera(self, camera_state):
         viewport = self._app().activeViewport
