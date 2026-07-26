@@ -7,6 +7,40 @@ from fmsm.application.errors import ServiceError
 from fmsm.domain.identifiers import identity_report, valid_uuid
 
 
+def require_capturable_ids(fusion):
+    """Raise an actionable error when the design cannot be captured as a scene.
+
+    A capture copies each entity's stored UUID straight into the scene file, so
+    an entity without one produces a scene the schema then rejects. Left to the
+    schema, the user saw ``COMPONENT_ID_INVALID: Component ID must be a UUID.``
+    against an ``assembly_state.components[4]`` index — accurate, but it names
+    neither the part at fault nor the Ensure IDs button that fixes it. Check
+    first and say both. Duplicates block capture for the same reason they block
+    render: two entities sharing a UUID cannot be told apart on replay.
+
+    IDs are deliberately not assigned here. Assigning one writes an attribute
+    into the user's Fusion document, and this add-in never modifies a document
+    behind the user's back; Ensure IDs is that consent, one click away.
+    """
+    report = identity_report(_primary_component_records(fusion.identity_records()))
+    duplicates = report["duplicate_occurrences"] + report["duplicate_components"]
+    if duplicates:
+        raise ServiceError(
+            "DUPLICATE_OCCURRENCE_ID" if report["duplicate_occurrences"] else "DUPLICATE_COMPONENT_ID",
+            "%s share a stable ID and cannot be told apart when the scene replays: %s. "
+            "Click Repair Duplicate IDs, then capture again."
+            % (_count(duplicates, "entity", "entities"), _labels(duplicates)),
+        )
+    missing = report["missing_occurrences"] + report["missing_components"]
+    if missing:
+        raise ServiceError(
+            "IDENTITY_IDS_MISSING",
+            "%s have no stable ID yet, so this scene could not be replayed: %s. "
+            "Click Ensure IDs, then capture again."
+            % (_count(missing, "entity", "entities"), _labels(missing)),
+        )
+
+
 class IdentityService(object):
     """Coordinate identity operations through an injected Fusion port."""
 
@@ -121,6 +155,24 @@ class IdentityService(object):
             },
             "blocking_codes": blocking,
         }
+
+
+_MAX_REPORTED_LABELS = 5
+
+
+def _count(entries, singular, plural):
+    return "%d %s" % (len(entries), singular if len(entries) == 1 else plural)
+
+
+def _labels(entries):
+    """Name the offending entities, capped so one bad import cannot flood the palette."""
+    names = []
+    for entry in entries:
+        names.extend(entry["labels"] if "labels" in entry else [entry["label"]])
+    shown = names[:_MAX_REPORTED_LABELS]
+    if len(names) > _MAX_REPORTED_LABELS:
+        shown.append("and %d more" % (len(names) - _MAX_REPORTED_LABELS))
+    return ", ".join(shown)
 
 
 def _primary_component_records(records):

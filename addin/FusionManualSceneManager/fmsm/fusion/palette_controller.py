@@ -22,6 +22,12 @@ PALETTE_NAME = "Fusion Manual Scene Manager"
 # the HTML document on some platforms while its subresources silently failed,
 # freezing the palette on its static connecting text.
 PALETTE_URL = "ui/palette.html"
+PALETTE_WIDTH = 460
+PALETTE_HEIGHT = 760
+# How many of the page's first requests trigger a native-surface repaint nudge.
+# The page's opening sequence is ping, project.status, identity.status, so three
+# covers the static first paint plus both DOM updates that follow it.
+STARTUP_REPAINT_NUDGES = 3
 
 
 def _log(message):
@@ -59,6 +65,10 @@ class _IncomingHtmlHandler(adsk.core.HTMLEventHandler):
         self._controller.record_palette_message()
         response = self._controller.dispatcher.dispatch(args.data)
         args.returnData = json.dumps(response)
+        # Last, once this request is fully answered: resizing the palette can
+        # pump the event loop, and nothing should re-enter the dispatcher while
+        # it is still mid-request.
+        self._controller.nudge_native_surface()
 
 
 class PaletteController(object):
@@ -82,12 +92,46 @@ class PaletteController(object):
         # retained here is garbage collected and its events silently stop.
         self._handlers = []
         self._saw_palette_message = False
+        self._repaint_nudges_left = STARTUP_REPAINT_NUDGES
 
     def record_palette_message(self):
         """Leave a one-time Text Commands breadcrumb when the handshake works."""
         if not self._saw_palette_message:
             self._saw_palette_message = True
             _log("first palette message received; the page-to-add-in link works.")
+
+    def nudge_native_surface(self):
+        """Resize the palette window a pixel and back to force it to paint.
+
+        The Qt WebEngine palette presents its first frame before layout settles
+        and then never repaints, so the window shows only the title bar and a
+        fragment of the first paint until the user collapses and re-expands it.
+        In-document JavaScript cannot fix this: every nudge it can reach (an
+        opacity flip, a body reflow, a scroll) stays inside the page, and the
+        host coalesces all of them away without invalidating the native surface.
+        The workaround that does work is a *window* resize, and only the add-in
+        side can perform one. Reproduce it here, on the page's first requests,
+        which are also the moments its DOM has just changed.
+
+        Kept to a single pixel of height, applied and immediately reverted, so
+        it is imperceptible; bounded to the startup burst so ordinary use never
+        resizes a window the user has since sized themselves.
+        """
+        if self._repaint_nudges_left <= 0:
+            return
+        self._repaint_nudges_left -= 1
+        palette = self.palette
+        if palette is None:
+            return
+        try:
+            width = palette.width
+            height = palette.height
+            palette.setSize(width, height + 1)
+            palette.setSize(width, height)
+        except Exception:
+            # Docked palettes own their own geometry and can refuse setSize.
+            # A palette that will not resize is not a reason to fail a request.
+            _log("palette declined the startup repaint resize.")
 
     def start(self):
         app = adsk.core.Application.get()
@@ -108,7 +152,7 @@ class PaletteController(object):
         # Create hidden so the event handler below is attached before the page
         # can load and send its first request.
         self.palette = ui.palettes.add(
-            PALETTE_ID, PALETTE_NAME, PALETTE_URL, False, True, True, 460, 760
+            PALETTE_ID, PALETTE_NAME, PALETTE_URL, False, True, True, PALETTE_WIDTH, PALETTE_HEIGHT
         )
         if self.palette is None:
             raise RuntimeError("Fusion did not create the FMSM palette.")

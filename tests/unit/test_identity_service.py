@@ -6,11 +6,36 @@ ADDIN_ROOT = Path(__file__).resolve().parents[2] / "addin" / "FusionManualSceneM
 if str(ADDIN_ROOT) not in sys.path:
     sys.path.insert(0, str(ADDIN_ROOT))
 
-from fmsm.application.identity_service import IdentityService
+import pytest
+
+from fmsm.application.errors import ServiceError
+from fmsm.application.identity_service import IdentityService, require_capturable_ids
 
 
 OCCURRENCE_A = "11111111-1111-4111-8111-111111111111"
 COMPONENT_A = "33333333-3333-4333-8333-333333333333"
+
+
+def test_capture_guard_caps_how_many_entities_it_names():
+    class ManyMissing(object):
+        def identity_records(self):
+            return [{
+                "occurrence_handle": index, "component_handle": index,
+                "component_key": "token-%d" % index, "label": "Part%d:1" % index,
+                "component_label": "Part%d" % index,
+                "occurrence_id": None, "component_id": None,
+            } for index in range(20)]
+
+    with pytest.raises(ServiceError) as error:
+        require_capturable_ids(ManyMissing())
+
+    message = error.value.message
+    assert error.value.code == "IDENTITY_IDS_MISSING"
+    # A freshly imported assembly can have hundreds of ID-less entities; the
+    # palette shows this on one line, so name a few and count the rest.
+    assert "40 entities" in message
+    assert "and 35 more" in message
+    assert message.count("Part") == 5
 
 
 class FakeFusion(object):

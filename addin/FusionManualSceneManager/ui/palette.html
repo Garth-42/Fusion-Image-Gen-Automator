@@ -107,13 +107,6 @@
     <button id="apply-state" type="button">Apply Captured State</button>
     <button id="restore-state" type="button">Restore Previous State</button>
   </section>
-  <section id="identity-panel" hidden>
-    <h2>Stable IDs</h2>
-    <p id="identity-status">Checking managed occurrence and component IDs…</p>
-    <button id="ensure-ids" type="button">Ensure IDs</button>
-    <button id="repair-ids" type="button">Repair Duplicate IDs</button>
-    <ul id="identity-details" class="warning-list"></ul>
-  </section>
 </main>
 <script>
 (function () {
@@ -175,11 +168,24 @@
   // resize (collapsing/expanding a section, minimizing and maximizing) forces
   // the native surface to invalidate. The same stale surface is why switching
   // the active document leaves the old document line on screen even after
-  // Refresh. Pushing a fresh composited frame from script reproduces that
-  // invalidation so the palette paints without any manual nudge.
+  // Refresh, and why a scene list edited on disk needs a second Refresh click
+  // to appear.
+  //
+  // The real fix lives in the add-in: only it can resize the palette *window*,
+  // which is what the manual workaround actually does, and PaletteController
+  // does that on the page's first requests. What follows is the in-document
+  // half — worth keeping because it costs nothing, it covers hosts that do
+  // repaint on DOM mutation, and it covers updates that arrive after the
+  // add-in's startup nudges are spent.
 
   var raf = window.requestAnimationFrame || function (callback) { return window.setTimeout(callback, 16); };
   var repaintQueued = false;
+  var EDITABLE_TAGS = { INPUT: true, TEXTAREA: true, SELECT: true };
+
+  function isEditing() {
+    var active = document.activeElement;
+    return !!(active && EDITABLE_TAGS[active.tagName]);
+  }
 
   function forceRepaint() {
     var root = document.documentElement;
@@ -187,22 +193,36 @@
     if (!root || body === null) { return; }
     // Flush any pending layout so the nudges below register as a fresh frame.
     void body.offsetHeight;
-    // Two nudges applied together and reverted on the next frame, so the host
-    // presents two distinct frames of the settled DOM.
+    // Three nudges, weakest to strongest, because hosts differ in what they
+    // treat as an invalidation:
     //
     // 1) Opacity: cheap, and enough on hosts that repaint on any composited
     //    change. It is compositor-only, though, so some hosts (notably the Qt
     //    WebEngine palette browser) coalesce it away without ever invalidating
     //    the native surface — which is why an opacity flip alone left the window
     //    blank until the user collapsed/expanded a panel.
-    // 2) Layout reflow: that manual workaround is a *resize*, so reproduce a
-    //    resize. Grow the body by one pixel at the very bottom and force the
-    //    reflow synchronously — a genuine layout change the host cannot skip,
-    //    placed where it neither moves the scroll position nor is visible.
+    // 2) Layout reflow: grow the body by one pixel at the very bottom and force
+    //    the reflow synchronously, where it neither moves the scroll position
+    //    nor is visible.
+    // 3) Box-tree rebuild: hiding the body and reading a geometry property
+    //    forces the host to throw the layout boxes away and build them again
+    //    when it is shown, which is the largest invalidation reachable from
+    //    inside the document. Both writes happen in one synchronous block, so
+    //    no frame can be presented with the body hidden.
     root.style.opacity = "0.999";
     var priorMarginBottom = body.style.marginBottom;
     body.style.marginBottom = "1px";
     void body.offsetHeight;
+    // Hiding the body blurs whatever is focused and drops the caret, so skip
+    // this one while the user is typing into the title or metadata fields.
+    // Nothing is focused during the blank-on-open case this exists for.
+    if (!isEditing()) {
+      var priorDisplay = body.style.display;
+      body.style.display = "none";
+      void body.offsetHeight;
+      body.style.display = priorDisplay;
+      void body.offsetHeight;
+    }
     raf(function () {
       root.style.opacity = "";
       body.style.marginBottom = priorMarginBottom;
@@ -341,6 +361,14 @@
   var currentProject = null;
   var selectedSceneId = null;
 
+  // An outcome message that must survive the project.status refresh a mutation
+  // fires behind it. Without this, "Rendered <image> and <thumbnail>." was set
+  // and then blanked microseconds later by that refresh's own success path, so
+  // renders that genuinely succeeded looked like they had done nothing. The
+  // background refreshes restore this line instead of clearing it; the next
+  // user action clears it, because by then it describes stale news.
+  var retainedFeedback = "";
+
   function newRequestId() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
       var random = (Math.random() * 16) | 0;
@@ -360,8 +388,9 @@
     finish(response);
   }
 
-  function sendRequest(action, payload, onSettled, busyText) {
+  function sendRequest(action, payload, onSettled, busyText, isBackgroundRefresh) {
     if (pendingRequest !== null) { return; }
+    if (!isBackgroundRefresh) { retainedFeedback = ""; }
     pendingRequest = { id: newRequestId(), onSettled: onSettled };
     setBusy(true);
     elements.feedback.textContent = busyText || "Working…";
@@ -524,31 +553,36 @@
     return "Error (" + response.error.code + "): " + response.error.message;
   }
 
-  function requestStatus() {
+  // Callers that refresh the project behind a completed mutation pass the
+  // message describing that mutation, so it is on screen when the dust settles
+  // rather than being overwritten by this refresh.
+  function requestStatus(retain) {
+    if (typeof retain === "string") { retainedFeedback = retain; }
     sendRequest("project.status", {}, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "";
+        elements.feedback.textContent = retainedFeedback;
         renderState(response.result);
       } else {
         elements.panel.hidden = false;
         elements.feedback.textContent = describeError(response);
       }
-    }, "Checking project association…");
+    }, "Checking project association…", true);
   }
 
   function requestIdentityStatus() {
     sendRequest("identity.status", {}, function (response) {
       // The identity check is a background refresh fired after project status,
-      // not a user action; clear the shared feedback line so its busy text
-      // ("Checking stable IDs…") does not linger on screen after it finishes.
-      elements.feedback.textContent = "";
+      // not a user action; restore the shared feedback line so its busy text
+      // ("Checking stable IDs…") does not linger on screen after it finishes
+      // and does not bury the outcome of whatever the user just did.
+      elements.feedback.textContent = retainedFeedback;
       if (response.ok) {
         renderIdentity(response.result);
       } else {
         elements.identityPanel.hidden = false;
         elements.identityStatus.textContent = describeError(response);
       }
-    }, "Checking stable IDs…");
+    }, "Checking stable IDs…", true);
   }
 
   function handleMutationResponse(response) {
@@ -597,7 +631,9 @@
     );
   });
 
-  elements.refresh.addEventListener("click", requestStatus);
+  // A click carries no message to retain, and any message still on the line
+  // describes an earlier action, so Refresh starts from a clean line.
+  elements.refresh.addEventListener("click", function () { requestStatus(""); });
 
   elements.ensureIds.addEventListener("click", function () {
     sendRequest("identity.ensure_ids", {}, function (response) {
@@ -660,8 +696,7 @@
 
   function refreshAfterSceneMutation(response) {
     if (response.ok) {
-      elements.feedback.textContent = "Scene list updated.";
-      requestStatus();
+      requestStatus("Scene list updated.");
     } else {
       elements.feedback.textContent = describeError(response);
     }
@@ -678,8 +713,7 @@
       instructions_markdown: elements.editSceneInstructions.value
     }, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "Scene metadata saved.";
-        requestStatus();
+        requestStatus("Scene metadata saved.");
       } else { elements.feedback.textContent = describeError(response); }
     }, "Saving scene metadata…");
   }
@@ -690,8 +724,7 @@
     if (!window.confirm("Replace this scene's saved camera, visibility, transforms, and opacity with the current Fusion view/state? Metadata and output file names will stay the same.")) { return; }
     sendRequest("scene.update_state", { scene_id: selectedSceneId }, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "Scene graphics updated from current Fusion state.";
-        requestStatus();
+        requestStatus("Scene graphics updated from current Fusion state.");
       } else { elements.feedback.textContent = describeError(response); }
     }, "Updating scene graphics from current Fusion state…");
   }
@@ -706,7 +739,7 @@
     order.splice(index, 1);
     order.splice(target, 0, moved);
     sendRequest("scene.reorder", { scene_ids: order }, function (response) {
-      if (response.ok) { elements.feedback.textContent = "Scene order updated."; requestStatus(); }
+      if (response.ok) { requestStatus("Scene order updated."); }
       else { elements.feedback.textContent = describeError(response); }
     }, "Updating scene order…");
   }
@@ -714,8 +747,7 @@
   function renderScene(sceneId) {
     sendRequest("scene.render", { scene_id: sceneId }, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "Rendered " + response.result.image_file + " and " + response.result.thumbnail_file + ".";
-        requestStatus();
+        requestStatus("Rendered " + response.result.image_file + " and " + response.result.thumbnail_file + ".");
       } else {
         elements.feedback.textContent = describeError(response);
       }
@@ -741,8 +773,7 @@
   function renderAllScenes() {
     sendRequest("scene.render_all", {}, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "Rendered " + response.result.count + " scene(s).";
-        requestStatus();
+        requestStatus("Rendered " + response.result.count + " scene(s).");
       } else {
         elements.feedback.textContent = describeError(response);
       }
@@ -791,9 +822,10 @@
   retryTimer = window.setInterval(attemptConnection, RETRY_INTERVAL_MS);
 
   // The blank-on-open failure happens before the first response can arrive, so
-  // nudge a few times across the first second to catch whichever frame the host
-  // finally makes the native surface paintable on.
-  [0, 60, 150, 350, 700].forEach(function (delay) {
+  // nudge repeatedly to catch whichever frame the host finally makes the native
+  // surface paintable on. Testers measured the blank window lasting past seven
+  // seconds, so the burst runs that long rather than the first second only.
+  [0, 60, 150, 350, 700, 1200, 2000, 3500, 5000, 7500].forEach(function (delay) {
     window.setTimeout(scheduleRepaint, delay);
   });
 }());

@@ -22,6 +22,14 @@ class _Palette(object):
         self.sent = []
         self.deleted = False
         self._is_visible = False
+        self.width = 460
+        self.height = 760
+        self.sizes = []
+
+    def setSize(self, width, height):
+        self.width = width
+        self.height = height
+        self.sizes.append((width, height))
 
     @property
     def isVisible(self):
@@ -97,6 +105,66 @@ def test_palette_subscribes_before_making_document_visible(monkeypatch):
     # JavaScript ``fusionSendData`` call), not ``sendInfoToHTML``, so it is
     # delivered even while the old browser blocks the palette's JS thread.
     assert palette.sent == []
+    assert json.loads(args.returnData)["result"] == {"message": "pong"}
+
+
+def test_first_requests_resize_the_window_so_the_palette_cannot_stay_blank(monkeypatch):
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    controller = controller_module.PaletteController()
+    controller.start()
+
+    handler = palette.incomingFromHTML.handlers[0]
+    for _ in range(controller_module.STARTUP_REPAINT_NUDGES + 2):
+        handler.notify(type("Args", (), {"data": _ping_request(), "returnData": None})())
+
+    # The Qt WebEngine palette paints its first frame before layout settles and
+    # then never repaints, leaving the window blank until the user collapses and
+    # re-expands it. Nothing the page can do from inside the document fixes
+    # that; only a resize of the window itself does, and only the add-in can
+    # perform one. Each startup request must therefore grow the window a pixel
+    # and put it straight back.
+    assert palette.sizes[:2] == [(460, 761), (460, 760)]
+    # Bounded to the startup burst: past that the user may have sized the
+    # window themselves, and nothing should be moving it.
+    assert len(palette.sizes) == 2 * controller_module.STARTUP_REPAINT_NUDGES
+    assert (palette.width, palette.height) == (460, 760)
+
+
+def test_the_repaint_resize_waits_until_the_request_is_answered(monkeypatch):
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    controller = controller_module.PaletteController()
+    controller.start()
+
+    args = type("Args", (), {"data": _ping_request(), "returnData": None})()
+    seen = []
+    palette.setSize = lambda width, height: seen.append(args.returnData)
+
+    palette.incomingFromHTML.handlers[0].notify(args)
+
+    # Resizing the palette can pump the event loop, which could let the page
+    # send its next request straight back into the dispatcher. Answering first
+    # means there is never a half-finished request to re-enter.
+    assert seen and all(response is not None for response in seen)
+
+
+def test_a_palette_that_refuses_to_resize_does_not_fail_the_request(monkeypatch):
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    controller = controller_module.PaletteController()
+    controller.start()
+
+    def refuse(width, height):
+        raise RuntimeError("this palette is docked")
+
+    palette.setSize = refuse
+    args = type("Args", (), {"data": _ping_request(), "returnData": None})()
+
+    palette.incomingFromHTML.handlers[0].notify(args)
+
+    # Docked palettes own their geometry and can reject setSize. A cosmetic
+    # repaint must never turn into a failed request.
     assert json.loads(args.returnData)["result"] == {"message": "pong"}
 
 

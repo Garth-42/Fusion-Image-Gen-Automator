@@ -44,7 +44,12 @@ class FakeFusion(object):
 
     def identity_records(self):
         self.identity_record_calls += 1
-        return [{"occurrence_handle": "occ-1", "component_handle": "component-1"}]
+        return [{
+            "occurrence_handle": "occ-1", "component_handle": "component-1",
+            "component_key": "token-1", "label": "Widget:1", "component_label": "Widget",
+            "occurrence_id": "5a1f2e1a-2c1b-4f2a-9b3c-6d7e8f901234",
+            "component_id": "6b2f3e2b-3d2c-4a3b-8c4d-7e8f90123456",
+        }]
 
     def validate_scene_references(self, scene, records=None):
         self.validation_records = records
@@ -95,6 +100,9 @@ def _services(tmp_path):
     fusion = FakeFusion()
     settings = FakeSettings(root)
     scene = SceneService(fusion, settings).create_from_current({"title": "Render Me"})["scene"]
+    # Scene capture scans identity too; zero the counter so the assertions below
+    # measure only what rendering itself scans.
+    fusion.identity_record_calls = 0
     return RenderService(fusion, settings), fusion, root, scene
 
 
@@ -169,6 +177,7 @@ def test_restore_failure_is_reported(tmp_path):
 def test_render_all_exports_each_scene_in_manifest_order_with_one_identity_scan(tmp_path):
     service, fusion, root, first = _services(tmp_path)
     second = SceneService(fusion, FakeSettings(root)).create_from_current({"title": "Second"})["scene"]
+    fusion.identity_record_calls = 0
 
     result = service.render_all({})
 

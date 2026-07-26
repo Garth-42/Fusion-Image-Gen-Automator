@@ -42,8 +42,11 @@ must be confirmed here:
 ```bash
 # Image dimensions
 python3 -c "from PIL import Image; print(Image.open('assets/generated/NAME.png').size)"
-# Pixel diff: getbbox() is None when identical, a box when they differ
-python3 -c "from PIL import Image, ImageChops as C; a=Image.open('A.png').convert('RGB'); b=Image.open('B.png').convert('RGB'); print(C.difference(a,b).getbbox())" 
+# Pixel diff. Compare the arrays directly rather than with
+# ImageChops.difference().getbbox(): on real renders with an alpha band that
+# reported no difference between images that genuinely differed in a fifth of
+# their pixels. Identical images print 0 differing pixels.
+python3 -c "import numpy as np; from PIL import Image; a,b=[np.asarray(Image.open(p).convert('RGBA'),dtype=np.int16) for p in ('A.png','B.png')]; d=np.abs(a-b); print('max per-channel diff:', d.max(), '| pixels differing:', int(d.any(axis=2).sum()), 'of', a.shape[0]*a.shape[1])"
 # Read a scene's assembly_state opacity placement
 python3 -c "import yaml,glob; d=yaml.safe_load(open(sorted(glob.glob('scenes/*.yaml'))[-1])); a=d['assembly_state']; print('occ opacity:',[o.get('opacity') for o in a['occurrences']]); print('comp keys:',[sorted(c) for c in a['components']])"
 # Force an export failure (macOS/Linux); restore afterward
@@ -199,8 +202,8 @@ chmod -R u+w assets/generated        # restore
 ### CU-5.1 Per-scene camera stays distinct (individual + batch)
 1. On Fixture A create three scenes with genuinely distinct, manually orbited cameras.
 2. Render each individually, then also run **Render All Scenes**.
-3. Terminal: pixel-diff each pair of the three outputs (`getbbox()` recipe).
-- **PASS**: all three differ (`getbbox()` non-`None`) and match their orientations.
+3. Terminal: pixel-diff each pair of the three outputs (array-diff recipe).
+- **PASS**: all three differ (a non-zero differing-pixel count) and match their orientations.
   *(Re-confirms the camera follow-up against the PR #27 code, which left camera
   capture/apply unchanged.)*
 
