@@ -38,6 +38,38 @@ def test_capture_guard_caps_how_many_entities_it_names():
     assert message.count("Part") == 5
 
 
+def test_capture_guard_counts_entities_not_report_entries():
+    shared = "11111111-1111-4111-8111-111111111111"
+
+    class OneMissing(object):
+        def identity_records(self):
+            return [{
+                "occurrence_handle": 1, "component_handle": 1, "component_key": "token-1",
+                "label": "Widget:1", "component_label": "Widget",
+                "occurrence_id": shared, "component_id": None,
+            }]
+
+    class TwoSharingOneId(object):
+        def identity_records(self):
+            return [{
+                "occurrence_handle": index, "component_handle": index,
+                "component_key": "token-%d" % index, "label": "Widget:%d" % index,
+                "component_label": "Widget%d" % index,
+                "occurrence_id": shared, "component_id": "3333333%d-3333-4333-8333-333333333333" % index,
+            } for index in (1, 2)]
+
+    with pytest.raises(ServiceError) as missing:
+        require_capturable_ids(OneMissing())
+    with pytest.raises(ServiceError) as duplicate:
+        require_capturable_ids(TwoSharingOneId())
+
+    # One entity reads as one entity, with a verb that agrees.
+    assert missing.value.message.startswith("1 entity without a stable ID")
+    # A collision is a single report entry covering two entities; counting
+    # entries would announce "1 entity sharing a stable ID", which is nonsense.
+    assert duplicate.value.message.startswith("2 entities sharing a stable ID")
+
+
 class FakeFusion(object):
     def __init__(self, records, document=True):
         self.records = records

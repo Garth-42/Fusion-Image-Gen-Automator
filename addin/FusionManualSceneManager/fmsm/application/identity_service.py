@@ -25,19 +25,19 @@ def require_capturable_ids(fusion):
     report = identity_report(_primary_component_records(fusion.identity_records()))
     duplicates = report["duplicate_occurrences"] + report["duplicate_components"]
     if duplicates:
+        count, labels = _describe(duplicates)
         raise ServiceError(
             "DUPLICATE_OCCURRENCE_ID" if report["duplicate_occurrences"] else "DUPLICATE_COMPONENT_ID",
-            "%s share a stable ID and cannot be told apart when the scene replays: %s. "
-            "Click Repair Duplicate IDs, then capture again."
-            % (_count(duplicates, "entity", "entities"), _labels(duplicates)),
+            "%s sharing a stable ID cannot be told apart when the scene replays: %s. "
+            "Click Repair Duplicate IDs, then capture again." % (count, labels),
         )
     missing = report["missing_occurrences"] + report["missing_components"]
     if missing:
+        count, labels = _describe(missing)
         raise ServiceError(
             "IDENTITY_IDS_MISSING",
-            "%s have no stable ID yet, so this scene could not be replayed: %s. "
-            "Click Ensure IDs, then capture again."
-            % (_count(missing, "entity", "entities"), _labels(missing)),
+            "%s without a stable ID, so this scene could not be replayed: %s. "
+            "Click Ensure IDs, then capture again." % (count, labels),
         )
 
 
@@ -160,19 +160,22 @@ class IdentityService(object):
 _MAX_REPORTED_LABELS = 5
 
 
-def _count(entries, singular, plural):
-    return "%d %s" % (len(entries), singular if len(entries) == 1 else plural)
+def _describe(entries):
+    """Return a count and a capped list of the entities behind *entries*.
 
-
-def _labels(entries):
-    """Name the offending entities, capped so one bad import cannot flood the palette."""
+    Counts entity names, not report entries: one duplicate entry already covers
+    the two-or-more entities that share the ID, and saying "1 entity" of a
+    collision reads as nonsense. The name list is capped because a freshly
+    imported assembly can produce hundreds of these and the palette shows them
+    on a single line.
+    """
     names = []
     for entry in entries:
         names.extend(entry["labels"] if "labels" in entry else [entry["label"]])
     shown = names[:_MAX_REPORTED_LABELS]
     if len(names) > _MAX_REPORTED_LABELS:
         shown.append("and %d more" % (len(names) - _MAX_REPORTED_LABELS))
-    return ", ".join(shown)
+    return "%d %s" % (len(names), "entity" if len(names) == 1 else "entities"), ", ".join(shown)
 
 
 def _primary_component_records(records):
