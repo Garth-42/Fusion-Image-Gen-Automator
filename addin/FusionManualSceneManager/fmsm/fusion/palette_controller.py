@@ -14,6 +14,7 @@ from fmsm.application.state_service import SceneStateService
 from fmsm.fusion.adapter import FusionEnvironment
 from fmsm.infrastructure.settings_store import SettingsStore
 from fmsm.messaging.dispatcher import MessageDispatcher
+from fmsm.messaging.protocol import peek_action
 
 PALETTE_ID = "fmsm_scene_manager_palette"
 PALETTE_NAME = "Fusion Manual Scene Manager"
@@ -24,10 +25,14 @@ PALETTE_NAME = "Fusion Manual Scene Manager"
 PALETTE_URL = "ui/palette.html"
 PALETTE_WIDTH = 460
 PALETTE_HEIGHT = 760
-# How many of the page's first requests trigger a native-surface repaint nudge.
-# The page's opening sequence is ping, project.status, identity.status, so three
-# covers the static first paint plus both DOM updates that follow it.
+# How many of the page's first requests trigger a native-surface repaint nudge
+# on their own. The page's opening sequence is ping, project.status,
+# identity.status, so three covers the static first paint plus both DOM updates
+# that follow it. Past the burst the page asks for nudges explicitly, by action.
 STARTUP_REPAINT_NUDGES = 3
+# The page sends this once it has updated its DOM, to ask for the window resize
+# that makes the update visible. See ``nudge_native_surface``.
+REPAINT_ACTION = "system.repaint"
 
 
 def _log(message):
@@ -68,7 +73,9 @@ class _IncomingHtmlHandler(adsk.core.HTMLEventHandler):
         # Last, once this request is fully answered: resizing the palette can
         # pump the event loop, and nothing should re-enter the dispatcher while
         # it is still mid-request.
-        self._controller.nudge_native_surface()
+        self._controller.nudge_native_surface(
+            requested=peek_action(args.data) == REPAINT_ACTION
+        )
 
 
 class PaletteController(object):
@@ -93,6 +100,8 @@ class PaletteController(object):
         self._handlers = []
         self._saw_palette_message = False
         self._repaint_nudges_left = STARTUP_REPAINT_NUDGES
+        self._logged_startup_resize_refusal = False
+        self._logged_requested_resize_refusal = False
 
     def record_palette_message(self):
         """Leave a one-time Text Commands breadcrumb when the handshake works."""
@@ -100,7 +109,7 @@ class PaletteController(object):
             self._saw_palette_message = True
             _log("first palette message received; the page-to-add-in link works.")
 
-    def nudge_native_surface(self):
+    def nudge_native_surface(self, requested=False):
         """Resize the palette window a pixel and back to force it to paint.
 
         The Qt WebEngine palette presents its first frame before layout settles
@@ -110,16 +119,33 @@ class PaletteController(object):
         opacity flip, a body reflow, a scroll) stays inside the page, and the
         host coalesces all of them away without invalidating the native surface.
         The workaround that does work is a *window* resize, and only the add-in
-        side can perform one. Reproduce it here, on the page's first requests,
-        which are also the moments its DOM has just changed.
+        side can perform one. Reproduce it here, around the page's requests.
 
-        Kept to a single pixel of height, applied and immediately reverted, so
-        it is imperceptible; bounded to the startup burst so ordinary use never
-        resizes a window the user has since sized themselves.
+        Kept to a single pixel of height, applied and immediately reverted, and
+        always measured from the palette's *current* size, so a window the user
+        has resized keeps the size they gave it.
+
+        ``requested`` marks the page's own ``system.repaint`` action. Nudging on
+        the startup burst alone was not enough, and the reason is an ordering
+        one: this runs as a request is answered, which is *before* the page has
+        received that response and updated its DOM. During startup three
+        requests follow one another closely, so each nudge happens to reveal the
+        update the previous response made, and the palette looks correct. A lone
+        request after startup — the Refresh behind a document switch, or behind
+        a scene list edited on disk — has nothing following it, so its update sat
+        on an unpainted surface until a further click nudged it forward. That is
+        the two-to-three-Refresh lag reported against R1.4 and R1.8.
+
+        So the page asks for this itself, once its DOM actually changed, and a
+        requested nudge is not drawn from the startup budget: it means the page
+        has something new to show, which is exactly when the surface needs
+        invalidating. It arrives only on a real content change, so an idle
+        Refresh still moves nothing.
         """
-        if self._repaint_nudges_left <= 0:
-            return
-        self._repaint_nudges_left -= 1
+        if not requested:
+            if self._repaint_nudges_left <= 0:
+                return
+            self._repaint_nudges_left -= 1
         palette = self.palette
         if palette is None:
             return
@@ -131,7 +157,17 @@ class PaletteController(object):
         except Exception:
             # Docked palettes own their own geometry and can refuse setSize.
             # A palette that will not resize is not a reason to fail a request.
-            _log("palette declined the startup repaint resize.")
+            # Requested nudges recur for as long as the palette is used, so log
+            # each kind once rather than on every content change; one line is
+            # enough to diagnose a host that refuses the resize, and a flooded
+            # Text Commands window buries everything else.
+            if requested:
+                if not self._logged_requested_resize_refusal:
+                    self._logged_requested_resize_refusal = True
+                    _log("palette declined the requested repaint resize.")
+            elif not self._logged_startup_resize_refusal:
+                self._logged_startup_resize_refusal = True
+                _log("palette declined the startup repaint resize.")
 
     def start(self):
         app = adsk.core.Application.get()

@@ -109,6 +109,35 @@ def test_document_forces_repaints_so_it_cannot_stay_blank():
     assert "scheduleRepaint()" in handle_raw
 
 
+def test_the_page_asks_the_addin_to_repaint_once_its_dom_has_changed():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Only a resize of the palette *window* invalidates this host's native
+    # surface, and only the add-in can perform one. It does that as it answers a
+    # request — which is before this page has handled the response and redrawn,
+    # so the resize shows the DOM as it stood beforehand. Startup hid that,
+    # because its three back-to-back requests each revealed the previous
+    # update; a lone Refresh after a document switch did not, and needed two or
+    # three clicks. The page has to ask for the resize after it redraws.
+    assert "system.repaint" in html
+    handle_raw = html[html.index("function handleRaw"):html.index("window.fusionJavaScriptHandler")]
+    assert "requestNativeRepaintIfChanged()" in handle_raw
+    # ...after the response has been applied to the DOM, not before it. (The
+    # earlier call in the reserved-id branch settles the repaint's own answer.)
+    assert handle_raw.index("handleRequestResponse(response)") < handle_raw.rindex("requestNativeRepaintIfChanged()")
+
+    request_repaint = html[
+        html.index("function requestNativeRepaintIfChanged"):html.index("// ---- transport")
+    ]
+    # Asking on every response would resize a window the user may have sized
+    # themselves; the request goes out only when visible content changed.
+    assert "paintedSignature" in request_repaint
+    # The answer to a repaint request must not be mistaken for the answer to
+    # whatever the user has in flight, so it carries a reserved id.
+    assert "REPAINT_REQUEST_ID" in handle_raw
+    assert "nativeRepaintPending" in request_repaint
+
+
 def test_startup_repaint_burst_outlasts_the_observed_blank_window():
     html = DOCUMENT.read_text(encoding="utf-8")
 

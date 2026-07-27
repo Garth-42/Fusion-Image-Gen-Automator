@@ -4,7 +4,7 @@ import uuid
 import fmsm.messaging.dispatcher as dispatcher_module
 from fmsm.application.errors import ServiceError
 from fmsm.messaging.dispatcher import MessageDispatcher
-from fmsm.messaging.protocol import ALLOWED_ACTIONS, NULL_REQUEST_ID
+from fmsm.messaging.protocol import ALLOWED_ACTIONS, NULL_REQUEST_ID, peek_action
 
 
 def _request(action, payload=None):
@@ -18,7 +18,7 @@ def _request(action, payload=None):
 
 def test_project_actions_are_allowed():
     assert {
-        "system.ping", "project.status", "project.initialize", "project.open",
+        "system.ping", "system.repaint", "project.status", "project.initialize", "project.open",
         "identity.status", "identity.ensure_ids", "identity.repair_duplicates",
         "state.capture_current", "state.apply_captured", "state.restore", "preview.summary",
         "scene.list", "scene.get", "scene.load", "scene.create_from_current", "scene.update_metadata",
@@ -91,3 +91,25 @@ def test_unexpected_failure_is_answered_not_raised(monkeypatch):
     assert details["exception"] == "RuntimeError"
     assert details["detail"] == "handler bug"
     assert "RuntimeError" in details["traceback"]
+
+
+def test_repaint_is_answered_without_a_handler():
+    assert "system.repaint" in ALLOWED_ACTIONS
+
+    # The page sends this after it has updated its DOM, purely so the palette
+    # controller's post-answer window resize lands behind the update rather
+    # than in front of it. It touches no service, so the dispatcher answers it
+    # directly; routing it to a missing handler would fail every repaint.
+    response = MessageDispatcher().dispatch(_request("system.repaint"))
+    assert response["ok"] is True
+    assert response["result"] == {}
+
+
+def test_peek_action_reads_an_action_without_admitting_the_request():
+    assert peek_action(_request("project.status")) == "project.status"
+    # Used only to decide behaviour around a request; anything unreadable must
+    # come back as None and leave rejection to parse_request.
+    assert peek_action("{not json") is None
+    assert peek_action("[]") is None
+    assert peek_action(json.dumps({"action": 7})) is None
+    assert peek_action(json.dumps({})) is None

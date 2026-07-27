@@ -7,6 +7,7 @@ import uuid
 PROTOCOL_VERSION = 1
 ALLOWED_ACTIONS = frozenset([
     "system.ping",
+    "system.repaint",
     "project.status",
     "project.initialize",
     "project.open",
@@ -58,6 +59,24 @@ def parse_request(raw):
     if not isinstance(payload, dict):
         raise ProtocolError("payload must be an object.")
     return request
+
+
+def peek_action(raw):
+    """Best-effort read of a request's action, for decisions made outside the
+    dispatcher.
+
+    Returns ``None`` for anything that cannot be read. Callers use this to
+    choose behaviour around a request, never to admit one: ``parse_request`` is
+    still the only thing that decides whether a request is valid.
+    """
+    try:
+        request = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(request, dict):
+        return None
+    action = request.get("action")
+    return action if isinstance(action, str) else None
 
 
 def response(request_id, result=None, error=None):
