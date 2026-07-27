@@ -29,6 +29,14 @@ class FakeFusion(object):
     def read_project_id(self):
         return self.project_id
 
+    def identity_records(self):
+        return [{
+            "occurrence_handle": "occ-1", "component_handle": "component-1",
+            "component_key": "token-1", "label": "Widget:1", "component_label": "Widget",
+            "occurrence_id": "5a1f2e1a-2c1b-4f2a-9b3c-6d7e8f901234",
+            "component_id": "6b2f3e2b-3d2c-4a3b-8c4d-7e8f90123456",
+        }]
+
     def capture_scene_state(self):
         return {
             "camera": {

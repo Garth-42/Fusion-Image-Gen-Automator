@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 
 from fmsm.application.errors import ServiceError
+from fmsm.application.identity_service import require_capturable_ids
 from fmsm.application.services import MANIFEST_FILE
 from fmsm.domain.filenames import scene_basename
 from fmsm.domain.models import RENDER_DEFAULTS
@@ -76,6 +77,7 @@ class SceneService(object):
         relative = "scenes/%s.yaml" % basename
         if yaml_store.project_path(root, relative).exists():
             raise ServiceError("SCENE_FILE_EXISTS", "The generated scene file already exists.")
+        require_capturable_ids(self._fusion)
         state = self._fusion.capture_scene_state()
         scene = self._new_scene(scene_id, basename, title, payload, state, manifest)
         self._write_scene(root, relative, scene)
@@ -98,6 +100,7 @@ class SceneService(object):
         root, manifest = self._require_project()
         entry = self._entry(manifest, payload.get("scene_id"))
         scene = self._load_valid_scene(root, entry["file"])
+        require_capturable_ids(self._fusion)
         state = self._fusion.capture_scene_state()
         scene["camera"] = state.get("camera")
         scene["assembly_state"] = state.get("assembly_state")

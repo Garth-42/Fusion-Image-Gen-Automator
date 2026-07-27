@@ -12,10 +12,24 @@ from fmsm.infrastructure import yaml_store
 PROJECT_ID = "0fbb1ed7-2e82-4e61-a5f8-83a2ed41e9db"
 
 
+OCCURRENCE_ID = "5a1f2e1a-2c1b-4f2a-9b3c-6d7e8f901234"
+COMPONENT_ID = "6b2f3e2b-3d2c-4a3b-8c4d-7e8f90123456"
+
+
 class FakeFusion(object):
     def __init__(self):
         self.project_id = PROJECT_ID
         self.eye_x = 1.0
+        # Capture copies these UUIDs into the scene file, so the identity of the
+        # live design decides whether a capture can produce a valid scene at all.
+        self.records = [{
+            "occurrence_handle": "occ-1", "component_handle": "component-1",
+            "component_key": "token-1", "label": "Widget:1", "component_label": "Widget",
+            "occurrence_id": OCCURRENCE_ID, "component_id": COMPONENT_ID,
+        }]
+
+    def identity_records(self):
+        return [dict(record) for record in self.records]
 
     def active_document(self):
         return {"name": "Assembly", "data_file_id": "urn:doc"}
@@ -79,6 +93,56 @@ def test_create_from_current_persists_scene_and_manifest_entry(tmp_path):
     payload = yaml_store.load(root / scene["file"])
     assert payload["scene"]["instructions_markdown"] == "Do it."
     assert payload["output"]["image_file"].startswith("assets/generated/install-left-din-rail__")
+
+
+def test_capture_names_the_parts_missing_stable_ids_instead_of_failing_the_schema(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    # A component whose FMSM.component_id attribute was never written. Capture
+    # used to copy the empty value straight into the scene file and let the
+    # schema reject it, so the palette showed
+    # "COMPONENT_ID_INVALID: Component ID must be a UUID." against an
+    # assembly_state.components index — naming neither the part nor the fix.
+    fusion.records[0]["component_id"] = None
+
+    with pytest.raises(ServiceError) as error:
+        service.create_from_current({"title": "Blocked"})
+
+    assert error.value.code == "IDENTITY_IDS_MISSING"
+    assert "Widget" in error.value.message
+    assert "Ensure IDs" in error.value.message
+    # Nothing may be left behind by a capture that could not complete.
+    assert yaml_store.load(root / "manual.yaml")["project"]["scenes"] == []
+    assert list((root / "scenes").glob("*.yaml")) == []
+
+
+def test_capture_is_blocked_while_two_entities_share_a_stable_id(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    twin = dict(fusion.records[0])
+    twin["component_key"] = "token-2"
+    twin["label"] = "Widget:2"
+    fusion.records.append(twin)
+
+    with pytest.raises(ServiceError) as error:
+        service.create_from_current({"title": "Blocked"})
+
+    # Duplicates are already refused at render; refusing them at capture keeps
+    # an unreplayable scene from being written in the first place.
+    assert error.value.code == "DUPLICATE_OCCURRENCE_ID"
+    assert "Repair Duplicate IDs" in error.value.message
+
+
+def test_recapturing_an_existing_scene_is_guarded_the_same_way(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    scene_id = service.create_from_current({"title": "Recapture"})["scene"]["scene_id"]
+    before = yaml_store.load(root / service.get({"scene_id": scene_id})["file"])
+    fusion.records[0]["occurrence_id"] = None
+
+    with pytest.raises(ServiceError) as error:
+        service.update_state({"scene_id": scene_id})
+
+    assert error.value.code == "IDENTITY_IDS_MISSING"
+    # The scene that was already on disk must survive a refused recapture.
+    assert yaml_store.load(root / service.get({"scene_id": scene_id})["file"]) == before
 
 
 def test_get_returns_editable_scene_metadata(tmp_path):

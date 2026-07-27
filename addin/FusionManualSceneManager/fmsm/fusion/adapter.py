@@ -77,20 +77,24 @@ class FusionEnvironment(FusionEnvironmentPort):
 
     @staticmethod
     def _occurrence_opacity(occurrence):
-        """Read one occurrence's own opacity override.
+        """Read the opacity override that applies to this occurrence.
 
-        Opacity overrides are per-occurrence and live on the component *proxy* in
-        that occurrence's assembly context, not on the shared native component
-        returned by ``occurrence.component``. Reading the native value misses
-        instance overrides set in the browser, which is why captured opacity did
-        not round-trip. ``visibleOpacity`` is the combined inherited result, not
-        the occurrence's own override, so it is not used here.
+        Opacity is a *component* override in the Fusion API. ``Occurrence`` has
+        no writable ``opacity`` property, and ``Component`` has no
+        ``createForAssemblyContext`` method -- an earlier attempt to reach a
+        per-occurrence proxy through
+        ``occurrence.component.createForAssemblyContext(occurrence)`` raised
+        ``AttributeError`` on every occurrence, which broke scene capture,
+        render, apply, and restore. ``Occurrence.visibleOpacity`` is the actual
+        rendered opacity but is read-only, so it cannot pair with a setter; the
+        docs state plainly that opacity is set through ``Component.opacity``.
+        Read and write that same property so capture and restore round-trip.
         """
-        return occurrence.component.createForAssemblyContext(occurrence).opacity
+        return occurrence.component.opacity
 
     @staticmethod
     def _set_occurrence_opacity(occurrence, opacity):
-        occurrence.component.createForAssemblyContext(occurrence).opacity = opacity
+        occurrence.component.opacity = opacity
 
     def _replay_transforms(self, occurrences, transforms, failure_message):
         """Apply occurrence transforms in one root-context batch.

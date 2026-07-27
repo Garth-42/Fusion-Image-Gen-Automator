@@ -89,10 +89,66 @@ def test_document_forces_repaints_so_it_cannot_stay_blank():
     assert "function forceRepaint" in html
     assert "function scheduleRepaint" in html
     assert "requestAnimationFrame" in html
+    # A compositor-only nudge (opacity alone) is coalesced away by the Qt
+    # WebEngine host without invalidating the native surface, so the repaint
+    # must also force a real reflow — the same thing collapsing/expanding a
+    # panel does. Pin that layout nudge so it cannot regress to opacity-only.
+    force_repaint = html[html.index("function forceRepaint"):html.index("function scheduleRepaint")]
+    assert "marginBottom" in force_repaint
+    assert "offsetHeight" in force_repaint
+    # Opacity plus a reflow still left the palette blank in Fusion, so the
+    # strongest in-document invalidation — throwing the box tree away and
+    # rebuilding it — has to be there too.
+    assert 'body.style.display = "none"' in force_repaint
+    # ...but not while the user is typing, because hiding the body drops focus
+    # and the caret with it.
+    assert "isEditing()" in force_repaint
     # The repaint must fire after every response so a document switch cannot
     # leave a stale document line on screen even after Refresh.
     handle_raw = html[html.index("function handleRaw"):html.index("window.fusionJavaScriptHandler")]
     assert "scheduleRepaint()" in handle_raw
+
+
+def test_the_page_asks_the_addin_to_repaint_once_its_dom_has_changed():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Only a resize of the palette *window* invalidates this host's native
+    # surface, and only the add-in can perform one. It does that as it answers a
+    # request — which is before this page has handled the response and redrawn,
+    # so the resize shows the DOM as it stood beforehand. Startup hid that,
+    # because its three back-to-back requests each revealed the previous
+    # update; a lone Refresh after a document switch did not, and needed two or
+    # three clicks. The page has to ask for the resize after it redraws.
+    assert "system.repaint" in html
+    handle_raw = html[html.index("function handleRaw"):html.index("window.fusionJavaScriptHandler")]
+    assert "requestNativeRepaintIfChanged()" in handle_raw
+    # ...after the response has been applied to the DOM, not before it. (The
+    # earlier call in the reserved-id branch settles the repaint's own answer.)
+    assert handle_raw.index("handleRequestResponse(response)") < handle_raw.rindex("requestNativeRepaintIfChanged()")
+
+    request_repaint = html[
+        html.index("function requestNativeRepaintIfChanged"):html.index("// ---- transport")
+    ]
+    # Asking on every response would resize a window the user may have sized
+    # themselves; the request goes out only when visible content changed.
+    assert "paintedSignature" in request_repaint
+    # The answer to a repaint request must not be mistaken for the answer to
+    # whatever the user has in flight, so it carries a reserved id.
+    assert "REPAINT_REQUEST_ID" in handle_raw
+    assert "nativeRepaintPending" in request_repaint
+
+
+def test_startup_repaint_burst_outlasts_the_observed_blank_window():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Testers measured the palette staying blank past seven seconds. A burst
+    # that stops at one second cannot cover that, so pin the tail of the
+    # schedule rather than only its existence.
+    burst = html[html.index("].forEach(function (delay) {") - 200:html.index("].forEach(function (delay) {")]
+    delays = [int(value) for value in burst[burst.rindex("[") + 1:].split(",")]
+    assert delays[0] == 0, "the first nudge must not wait for a timer"
+    assert max(delays) >= 7500, "the burst must outlast the blank window testers measured"
+    assert delays == sorted(delays)
 
 
 def test_identity_status_clears_the_shared_feedback_line():
@@ -100,9 +156,42 @@ def test_identity_status_clears_the_shared_feedback_line():
 
     body = html[html.index("function requestIdentityStatus"):html.index("function handleMutationResponse")]
     # The busy text is shown while the background check runs; it must be cleared
-    # when the check settles so it does not read as a stuck operation.
+    # when the check settles so it does not read as a stuck operation. It is the
+    # retained message that replaces it, which is the empty string unless a
+    # mutation just finished and asked for its outcome to survive this refresh.
     assert "Checking stable IDs" in body
-    assert 'elements.feedback.textContent = ""' in body
+    assert "elements.feedback.textContent = retainedFeedback" in body
+    # A background refresh must not wipe the message it was fired to preserve.
+    assert '"Checking stable IDs…", true' in body
+
+
+def test_mutation_outcomes_survive_the_refresh_fired_behind_them():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # A render that succeeded reported nothing: renderScene set its message and
+    # then called requestStatus, whose own success path blanked the same line
+    # microseconds later. Every mutation that refreshes behind itself must hand
+    # its message to requestStatus instead of racing it.
+    for message in (
+        '"Rendered " + response.result.image_file',
+        '"Rendered " + response.result.count',
+        '"Scene list updated."',
+        '"Scene metadata saved."',
+        '"Scene graphics updated from current Fusion state."',
+        '"Scene order updated."',
+    ):
+        assert "requestStatus(" + message in html, message
+
+    status = html[html.index("function requestStatus"):html.index("function requestIdentityStatus")]
+    assert "elements.feedback.textContent = retainedFeedback" in status
+    assert '"Checking project association…", true' in status
+    # Refresh is a user action, so it starts from a clean line rather than
+    # re-showing the outcome of something the user did earlier.
+    assert 'elements.refresh.addEventListener("click", function () { requestStatus(""); });' in html
+    # Any request that is not one of those two background refreshes drops the
+    # retained message, so it can never outlive the action it describes.
+    send_request = html[html.index("function sendRequest"):html.index("function setBusy")]
+    assert 'if (!isBackgroundRefresh) { retainedFeedback = ""; }' in send_request
 
 
 def test_controller_url_points_at_the_document(monkeypatch):

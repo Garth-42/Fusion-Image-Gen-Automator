@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+import traceback
+
 from fmsm.application.errors import ServiceError
 from fmsm.messaging.protocol import (
     NULL_REQUEST_ID,
@@ -28,6 +30,14 @@ class MessageDispatcher(object):
             action = request["action"]
             if action == "system.ping":
                 return response(request_id, {"message": "pong"})
+            if action == "system.repaint":
+                # Answered for its side effect alone. The palette controller
+                # resizes the palette window as it returns a response, and that
+                # resize is the only thing that invalidates the host's native
+                # surface. The page sends this action *after* it has updated its
+                # DOM, so the resize lands behind the change it has to show
+                # rather than in front of it.
+                return response(request_id, {})
             handler = self._handlers.get(action)
             if handler is None:
                 return self._error(request_id, "INVALID_PALETTE_REQUEST", "Unhandled action.")
@@ -36,9 +46,18 @@ class MessageDispatcher(object):
             return self._error(request_id, "INVALID_PALETTE_REQUEST", str(error))
         except ServiceError as error:
             return self._error(request_id, error.code, error.message, error.details)
-        except Exception:
+        except Exception as error:
+            # An unexpected exception is a bug, not a handled outcome, but the
+            # user still needs something to act on. Swallowing it into a bare
+            # "unexpected error" hid the real cause (for example an AttributeError
+            # from a wrong Fusion API call) behind an opaque message with nowhere
+            # to look. Name the exception in the message and carry the full
+            # traceback in details so the palette can show what actually failed.
             return self._error(
-                request_id, "INTERNAL_ERROR", "Unexpected add-in error while handling the request."
+                request_id,
+                "INTERNAL_ERROR",
+                "Unexpected add-in error: %s: %s" % (type(error).__name__, error),
+                {"exception": type(error).__name__, "detail": str(error), "traceback": traceback.format_exc()},
             )
 
     @staticmethod
