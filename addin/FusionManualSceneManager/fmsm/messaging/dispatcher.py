@@ -30,6 +30,14 @@ class MessageDispatcher(object):
             action = request["action"]
             if action == "system.ping":
                 return response(request_id, {"message": "pong"})
+            if action == "system.repaint":
+                # Answered for its side effect alone. The palette controller
+                # resizes the palette window as it returns a response, and that
+                # resize is the only thing that invalidates the host's native
+                # surface. The page sends this action *after* it has updated its
+                # DOM, so the resize lands behind the change it has to show
+                # rather than in front of it.
+                return response(request_id, {})
             handler = self._handlers.get(action)
             if handler is None:
                 return self._error(request_id, "INVALID_PALETTE_REQUEST", "Unhandled action.")

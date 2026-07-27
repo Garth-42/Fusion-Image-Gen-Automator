@@ -82,6 +82,15 @@ def _ping_request():
     })
 
 
+def _repaint_request():
+    return json.dumps({
+        "protocol_version": 1,
+        "request_id": "00000000-0000-4000-8000-000000000002",
+        "action": "system.repaint",
+        "payload": {},
+    })
+
+
 def test_palette_subscribes_before_making_document_visible(monkeypatch):
     palette = _Palette()
     controller_module, palettes = _load_controller(monkeypatch, palette)
@@ -129,6 +138,84 @@ def test_first_requests_resize_the_window_so_the_palette_cannot_stay_blank(monke
     # window themselves, and nothing should be moving it.
     assert len(palette.sizes) == 2 * controller_module.STARTUP_REPAINT_NUDGES
     assert (palette.width, palette.height) == (460, 760)
+
+
+def test_a_requested_repaint_resizes_after_the_startup_budget_is_spent(monkeypatch):
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    controller = controller_module.PaletteController()
+    controller.start()
+
+    handler = palette.incomingFromHTML.handlers[0]
+    for _ in range(controller_module.STARTUP_REPAINT_NUDGES):
+        handler.notify(type("Args", (), {"data": _ping_request(), "returnData": None})())
+    spent = len(palette.sizes)
+
+    # An ordinary request past the burst moves nothing: the user may have sized
+    # the window themselves by now.
+    handler.notify(type("Args", (), {"data": _ping_request(), "returnData": None})())
+    assert len(palette.sizes) == spent
+
+    # The nudge fires as a request is answered, which is before the page has
+    # received that response and redrawn. Startup masks this because three
+    # requests follow each other, so each nudge reveals the previous update; a
+    # lone Refresh after a document switch has nothing behind it and its update
+    # sat unpainted until further clicks pushed it forward. The page therefore
+    # asks for the resize itself once its DOM has changed, and that request is
+    # not drawn from the startup budget.
+    handler.notify(type("Args", (), {"data": _repaint_request(), "returnData": None})())
+    assert palette.sizes[spent:] == [(460, 761), (460, 760)]
+    assert (palette.width, palette.height) == (460, 760)
+
+
+def test_a_requested_repaint_restores_a_size_the_user_chose(monkeypatch):
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    controller = controller_module.PaletteController()
+    controller.start()
+
+    handler = palette.incomingFromHTML.handlers[0]
+    # The user drags the palette to a size of their own.
+    palette.width = 700
+    palette.height = 400
+    palette.sizes = []
+
+    for _ in range(4):
+        handler.notify(type("Args", (), {"data": _repaint_request(), "returnData": None})())
+
+    # Requested repaints recur for as long as the palette is used, so each one
+    # must measure from the current size and put it straight back. A nudge that
+    # restored the default would fight every resize the user makes.
+    assert (palette.width, palette.height) == (700, 400)
+    assert palette.sizes == [(700, 401), (700, 400)] * 4
+
+
+def test_a_docked_palette_logs_each_refused_repaint_kind_once(monkeypatch):
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    logged = []
+    monkeypatch.setattr(controller_module, "_log", logged.append)
+    controller = controller_module.PaletteController()
+    controller.start()
+
+    def refuse(width, height):
+        raise RuntimeError("this palette is docked")
+
+    palette.setSize = refuse
+    handler = palette.incomingFromHTML.handlers[0]
+    for _ in range(3):
+        handler.notify(type("Args", (), {"data": _ping_request(), "returnData": None})())
+    for _ in range(3):
+        handler.notify(type("Args", (), {"data": _repaint_request(), "returnData": None})())
+
+    # Requested repaints keep coming for the life of the palette, so a host that
+    # refuses every one of them must not flood Text Commands and bury the rest
+    # of the diagnostics. One line per kind is all it takes to diagnose.
+    refusals = [line for line in logged if "declined" in line]
+    assert refusals == [
+        "palette declined the startup repaint resize.",
+        "palette declined the requested repaint resize.",
+    ]
 
 
 def test_the_repaint_resize_waits_until_the_request_is_answered(monkeypatch):

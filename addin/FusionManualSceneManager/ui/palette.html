@@ -238,6 +238,47 @@
     });
   }
 
+  // ---- native-surface repaint, asked for from here ----------------------
+  //
+  // The add-in resizes the palette window at the end of every request it
+  // answers, which is the only gesture that invalidates this host's native
+  // surface. But that moment comes *before* this page has received the response
+  // and updated its DOM, so the resize shows the page as it stood before the
+  // update. Startup hides the flaw: ping, project.status and identity.status
+  // follow one another closely, so each resize reveals the previous response's
+  // update and the palette ends up correct. A lone request after startup has
+  // nothing behind it — which is why one Refresh after switching documents left
+  // the old Document: line on screen, and why a scene list reordered on disk
+  // needed a second and sometimes third click to appear.
+  //
+  // So ask for the resize from here instead, once the DOM has actually changed:
+  // a no-op request whose only purpose is to be answered, so that the add-in's
+  // post-answer resize lands behind the update rather than in front of it.
+  var REPAINT_REQUEST_ID = "00000000-0000-4000-8000-000000000002";
+  var nativeRepaintPending = false;
+  var paintedSignature = null;
+
+  function contentSignature() {
+    var body = document.body;
+    return body ? body.textContent : "";
+  }
+
+  // Only ask when the visible content actually changed. A resize the user
+  // cannot see is still a resize, and a palette that nudged its own window on
+  // every response would be moving a window the user may have sized themselves.
+  function requestNativeRepaintIfChanged() {
+    var signature = contentSignature();
+    if (signature === paintedSignature) { return; }
+    // A repaint already in flight is answered after this change too, so let it
+    // carry the update; re-check when it settles in case more arrived since.
+    if (nativeRepaintPending) { return; }
+    paintedSignature = signature;
+    nativeRepaintPending = true;
+    if (!transmit("system.repaint", {}, REPAINT_REQUEST_ID)) {
+      nativeRepaintPending = false;
+    }
+  }
+
   // ---- transport -------------------------------------------------------
 
   function transmit(action, payload, requestId) {
@@ -273,6 +314,14 @@
       return;
     }
     if (!response) { return; }
+    // The repaint request has already done its work by the time its answer
+    // arrives — the add-in resized the window on the way out. It carries no
+    // result, and must not be mistaken for the user's in-flight request.
+    if (response.request_id === REPAINT_REQUEST_ID) {
+      nativeRepaintPending = false;
+      requestNativeRepaintIfChanged();
+      return;
+    }
     if (!connected) {
       handleHandshakeResponse(response);
     } else {
@@ -281,6 +330,10 @@
     // Every response updates the DOM (status, scene list, document line); force
     // the paint the host would otherwise skip.
     scheduleRepaint();
+    // The in-document repaint above cannot reach the native surface on this
+    // host. Now that the new DOM is in place, ask the add-in for the window
+    // resize that can.
+    requestNativeRepaintIfChanged();
   }
 
   // Python-initiated pushes arrive here (none are sent today). The handler
