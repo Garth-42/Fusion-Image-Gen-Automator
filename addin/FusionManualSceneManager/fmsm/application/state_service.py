@@ -65,7 +65,15 @@ class SceneStateService(object):
         references = self._fusion.validate_scene_references({"assembly_state": self._captured_state["assembly_state"]})
         if references:
             raise ServiceError(references[0]["code"], references[0]["message"], references[0])
-        return self._guard.apply(self._captured_state)
+        result = self._guard.apply(self._captured_state)
+        # Answer in the same shape as ``capture_current``. Returning the guard's
+        # warnings alone left the palette reading counts that were not there and
+        # printing "Captured state contains undefined occurrence(s)" after an
+        # apply that had in fact worked perfectly (round-4 S1, ancillary 2).
+        summary = self._summary(self._captured_state)
+        summary["applied"] = True
+        summary["warnings"] = result.get("warnings", [])
+        return summary
 
     def apply(self, scene):
         issues = validate_scene(scene)

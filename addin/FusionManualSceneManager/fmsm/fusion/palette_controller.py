@@ -33,12 +33,28 @@ STARTUP_REPAINT_NUDGES = 3
 # The page sends this once it has updated its DOM, to ask for the window resize
 # that makes the update visible. See ``nudge_native_surface``.
 REPAINT_ACTION = "system.repaint"
+# A page whose script fails can write to its own feedback line and nowhere else,
+# so the failure was visible until the next click and recorded nowhere. This
+# action hands the page a way into the log a tester actually reads.
+LOG_ACTION = "system.log"
+# Enough for an error message with a stack frame and a source location; a page
+# that starts looping on errors must not be able to flood Text Commands.
+MAX_LOGGED_PAGE_MESSAGE = 500
 
 
 def _log(message):
     app = adsk.core.Application.get()
     if app is not None:
         app.log("FMSM: %s" % message)
+
+
+def log_page_message(payload):
+    """Record a message the palette page could not otherwise report anywhere."""
+    message = str(payload.get("message") or "").strip()
+    if not message:
+        return {"logged": False}
+    _log("page: %s" % message[:MAX_LOGGED_PAGE_MESSAGE])
+    return {"logged": True}
 
 
 def report_startup_failure(traceback_text):
@@ -94,6 +110,7 @@ class PaletteController(object):
         handlers.update(scene_service.handlers())
         handlers.update(render_service.handlers())
         handlers.update(preview_service.handlers())
+        handlers[LOG_ACTION] = log_page_message
         self.dispatcher = MessageDispatcher(handlers)
         # Fusion only holds weak references to event handlers; anything not
         # retained here is garbage collected and its events silently stop.

@@ -163,6 +163,62 @@ def test_render_fails_loudly_when_export_writes_no_file(tmp_path):
     assert not yaml_store.project_path(root, scene["output"]["image_file"]).exists()
 
 
+def test_render_fails_loudly_when_the_target_image_already_exists(tmp_path):
+    """The silent failure round-4 S2.4 found, and the reason for staging.
+
+    Re-rendering a scene whose PNG was already on disk used to pass the
+    "was anything written?" check against the *previous* render's file, so a
+    blocked write reported the ordinary success message and left no trace
+    anywhere. The check now runs against a staging path that cannot pre-exist.
+    """
+    service, fusion, root, scene = _services(tmp_path)
+    existing = yaml_store.project_path(root, scene["output"]["image_file"])
+    existing.write_text("earlier render", encoding="utf-8")
+    fusion.silent_export = True
+
+    with pytest.raises(ServiceError) as error:
+        service.render({"scene_id": scene["scene_id"]})
+
+    assert error.value.code == "RENDER_FAILED"
+    assert scene["output"]["image_file"] in error.value.message
+    # The earlier good image is still the one on disk: a failed render must not
+    # destroy the render it could not replace.
+    assert existing.read_text(encoding="utf-8") == "earlier render"
+    assert fusion.restored == 1
+
+
+def test_render_reports_a_write_that_fails_after_a_successful_export(tmp_path, monkeypatch):
+    service, fusion, root, scene = _services(tmp_path)
+    existing = yaml_store.project_path(root, scene["output"]["image_file"])
+    existing.write_text("earlier render", encoding="utf-8")
+
+    def refuse(staging, destination):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr("fmsm.application.render_service.atomic_write.commit", refuse)
+
+    with pytest.raises(ServiceError) as error:
+        service.render({"scene_id": scene["scene_id"]})
+
+    assert error.value.code == "RENDER_FAILED"
+    assert "Permission denied" in error.value.message
+    assert existing.read_text(encoding="utf-8") == "earlier render"
+    assert fusion.restored == 1
+
+
+def test_render_leaves_no_staging_files_behind(tmp_path):
+    service, fusion, root, scene = _services(tmp_path)
+
+    service.render({"scene_id": scene["scene_id"]})
+    fusion.silent_export = True
+    with pytest.raises(ServiceError):
+        service.render({"scene_id": scene["scene_id"]})
+
+    for relative in ("assets/generated", "assets/thumbnails"):
+        leftovers = [path.name for path in yaml_store.project_path(root, relative).iterdir() if "fmsm-staging" in path.name]
+        assert leftovers == []
+
+
 def test_restore_failure_is_reported(tmp_path):
     service, fusion, root, scene = _services(tmp_path)
     fusion.restore_error = RuntimeError("locked")

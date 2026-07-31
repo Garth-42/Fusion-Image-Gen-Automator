@@ -94,7 +94,7 @@ class FakeFusion(object):
         raise AssertionError("unknown handle")
 
 
-def record(occurrence_handle, component_handle, occurrence_id=None, component_id=None, label="Part"):
+def record(occurrence_handle, component_handle, occurrence_id=None, component_id=None, label="Part", referenced=False):
     return {
         "occurrence_handle": occurrence_handle,
         "component_handle": component_handle,
@@ -103,6 +103,7 @@ def record(occurrence_handle, component_handle, occurrence_id=None, component_id
         "component_id": component_id,
         "label": label,
         "component_label": "Component " + component_handle,
+        "component_is_referenced": referenced,
     }
 
 
@@ -130,10 +131,39 @@ def test_ensure_ids_assigns_only_missing_or_invalid_ids_once_per_component():
 
     result = IdentityService(fusion).ensure_ids({})
 
-    assert result["assigned"] == {"occurrences": 2, "components": 1}
+    assert result["assigned"] == {"occurrences": 2, "components": 1, "linked_components": []}
     assert all(uuid.UUID(item["occurrence_id"]) for item in fusion.records)
     assert all(uuid.UUID(item["component_id"]) for item in fusion.records)
     assert result["missing"] == {"occurrences": [], "components": []}
+
+
+def test_ids_assigned_into_linked_documents_are_named_because_saving_will_not_keep_them():
+    """Round-4 S4.2: a referenced component's ID never survives a restart.
+
+    Fusion stores the attribute in the linked component's own document, which
+    saving this assembly does not save. Nothing in the add-in can change that,
+    so both the assignment and the standing status have to say which components
+    are affected — otherwise the ID quietly comes back missing every session and
+    reads as the add-in losing it.
+    """
+    fusion = FakeFusion([
+        record("occ-1", "component-1", OCCURRENCE_A, None, "Local:1"),
+        record("occ-2", "component-2", OCCURRENCE_A, None, "Linked:1", referenced=True),
+    ])
+
+    result = IdentityService(fusion).ensure_ids({})
+
+    assert result["assigned"]["components"] == 2
+    assert result["assigned"]["linked_components"] == ["Component component-2"]
+    assert result["linked_components"] == ["Component component-2"]
+    # Reported on every status check, not only on the click that assigned them.
+    assert IdentityService(fusion).status({})["linked_components"] == ["Component component-2"]
+
+
+def test_status_reports_no_linked_components_when_everything_is_local():
+    fusion = FakeFusion([record("occ-1", "component-1", OCCURRENCE_A, COMPONENT_A)])
+
+    assert IdentityService(fusion).status({})["linked_components"] == []
 
 
 def test_repair_duplicates_preserves_first_entity_and_assigns_new_ids_to_others():

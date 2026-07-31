@@ -40,6 +40,40 @@ FusionManualSceneManager.manifest
 
 If it is not listed after reopening the dialog, copy the complete bundle directory to an existing Add-Ins search folder shown by Fusion.
 
+## A stable ID keeps coming back missing after every restart
+
+If the **Stable IDs** panel reports the same entity as missing every time you
+reopen the document, even though you clicked **Ensure IDs** and saved, check
+whether the panel also lists that component under "linked from other documents".
+Fusion stores a referenced component's attributes in *its* document, which
+saving this assembly does not save. Nothing you can click will persist it — see
+`docs/KNOWN_LIMITATIONS.md` for the full diagnosis and the workaround. This is
+not the add-in losing the ID, and it is not a save you forgot.
+
+## A render reports success but no image appears
+
+The palette reports `Error (RENDER_FAILED): …` when Fusion's export writes
+nothing, including into a read-only output folder and onto a file that cannot be
+replaced. The message names the path it could not write. Check that
+`assets/generated` and `assets/thumbnails`, and the target PNGs already inside
+them, are writable by you — on macOS that includes the Finder **Locked** flag on
+the individual files, which blocks an overwrite even when the folder is
+writable.
+
+An earlier build reported success in exactly this situation when the target file
+already existed from a previous render, because it checked only that the file
+was there. If you are on a build that does that, the giveaway is the file's
+modification time not moving.
+
+## The palette shows a script error
+
+`Palette script error: …` on the connection or feedback line means the page's
+own JavaScript failed. The same text is written to Fusion's **Text Commands**
+window prefixed with `FMSM: page:`, so it survives closing the palette. Include
+that line — it carries the source location — in a bug report. A bare
+`Script error.` with no location means the host masked the details; the log line
+is still worth capturing.
+
 ## Run the pure-Python checks
 
 From the repository root, run:

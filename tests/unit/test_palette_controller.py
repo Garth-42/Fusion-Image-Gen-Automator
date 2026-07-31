@@ -91,6 +91,54 @@ def _repaint_request():
     })
 
 
+def _log_request(message):
+    return json.dumps({
+        "protocol_version": 1,
+        "request_id": "00000000-0000-4000-8000-000000000003",
+        "action": "system.log",
+        "payload": {"message": message},
+    })
+
+
+def test_the_page_can_write_its_own_failures_into_the_fusion_log(monkeypatch):
+    """Round-4 S4, ancillary 1: "Palette script error: Script error." was
+    on screen until the next click and in Text Commands never — so there was
+    nothing left to investigate. The page has no other way into that log."""
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    logged = []
+    monkeypatch.setattr(controller_module, "_log", logged.append)
+    controller = controller_module.PaletteController()
+    controller.start()
+    handler = palette.incomingFromHTML.handlers[0]
+
+    args = type("Args", (), {"data": _log_request("Palette script error: boom (line 12)"), "returnData": None})()
+    handler.notify(args)
+
+    assert json.loads(args.returnData)["result"] == {"logged": True}
+    assert "page: Palette script error: boom (line 12)" in logged
+
+
+def test_a_page_stuck_in_an_error_loop_cannot_flood_the_fusion_log(monkeypatch):
+    palette = _Palette()
+    controller_module, _ = _load_controller(monkeypatch, palette)
+    logged = []
+    monkeypatch.setattr(controller_module, "_log", logged.append)
+    controller = controller_module.PaletteController()
+    controller.start()
+    handler = palette.incomingFromHTML.handlers[0]
+
+    handler.notify(type("Args", (), {"data": _log_request("x" * 5000), "returnData": None})())
+    empty = type("Args", (), {"data": _log_request("   "), "returnData": None})()
+    handler.notify(empty)
+
+    from_page = [line for line in logged if line.startswith("page: ")]
+    assert len(from_page) == 1
+    assert len(from_page[0]) <= controller_module.MAX_LOGGED_PAGE_MESSAGE + len("page: ")
+    # A message with nothing in it is not worth a line in the log.
+    assert json.loads(empty.returnData)["result"] == {"logged": False}
+
+
 def test_palette_subscribes_before_making_document_visible(monkeypatch):
     palette = _Palette()
     controller_module, palettes = _load_controller(monkeypatch, palette)

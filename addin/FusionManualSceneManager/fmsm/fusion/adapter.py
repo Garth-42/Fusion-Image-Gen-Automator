@@ -129,8 +129,25 @@ class FusionEnvironment(FusionEnvironmentPort):
                 "label": occurrence.name,
                 "component_label": component.name,
                 "part_number": component.partNumber,
+                "component_is_referenced": self._is_referenced(occurrence),
             })
         return records
+
+    @staticmethod
+    def _is_referenced(occurrence):
+        """Whether this occurrence's component lives in a separate document.
+
+        It matters for identity: a referenced component's attributes belong to
+        that other document, so ``Ensure IDs`` writes an ID Fusion will not save
+        when the user saves this assembly. See ``_linked_component_labels`` in
+        the identity service for what is done about it.
+        """
+        try:
+            return bool(occurrence.isReferencedComponent)
+        except Exception:
+            # Not every Fusion build exposes the property; an unknown answer
+            # must not take identity reporting down with it.
+            return False
 
     @staticmethod
     def _attribute_value(entity, name):
@@ -300,7 +317,10 @@ class FusionEnvironment(FusionEnvironmentPort):
             raise RuntimeError("Fusion did not save the viewport image.")
         # A True return is not proof of a file: exports into a read-only folder
         # have been observed to report success while writing nothing. Confirm the
-        # file exists and is non-empty so the failure cannot pass silently.
+        # file exists and is non-empty so the failure cannot pass silently. The
+        # caller hands us a staging path that cannot already exist, so unlike a
+        # check against the final destination this one cannot be satisfied by an
+        # earlier render's leftovers.
         written = Path(path)
         if not written.is_file() or written.stat().st_size == 0:
             raise RuntimeError("Fusion reported a saved image but none was written to %s." % path)

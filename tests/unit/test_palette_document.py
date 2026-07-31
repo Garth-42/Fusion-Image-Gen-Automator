@@ -194,6 +194,123 @@ def test_mutation_outcomes_survive_the_refresh_fired_behind_them():
     assert 'if (!isBackgroundRefresh) { retainedFeedback = ""; }' in send_request
 
 
+def test_every_settled_request_clears_the_busy_text_it_put_up():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Capture, Apply, Restore and Edit all report into a line of their own and
+    # so never touched the shared feedback line, which kept their busy text —
+    # "Capturing current Fusion state…", "Loading scene metadata…" — on screen
+    # indefinitely and made finished operations read as hung ones. Clearing it
+    # per handler would leave the next handler to forget again; the request
+    # settling is what makes the busy text untrue, so it is cleared there.
+    settle = html[html.index("function handleRequestResponse"):html.index("function sendRequest")]
+    assert "elements.feedback.textContent = retainedFeedback;" in settle
+    assert settle.index("elements.feedback.textContent") < settle.index("finish(response)")
+
+
+def test_applying_a_captured_state_reports_what_it_applied():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Treating everything that was not a restore as a capture printed
+    # "Captured state contains undefined occurrence(s) and undefined
+    # component(s)" after an apply that had worked perfectly.
+    describe = html[html.index("function describeStateResult"):html.index("function stateRequest")]
+    assert '"state.restore"' in describe
+    assert '"state.apply_captured"' in describe
+    assert "Applied captured state" in describe
+    # Apply hides occurrences the capture never listed. That changes the
+    # viewport, so it cannot be the part of the outcome nobody is told about.
+    assert "UNLISTED_OCCURRENCE_HIDDEN" in describe
+
+
+def test_the_repaint_puts_the_scroll_position_back():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Hiding the body throws the box tree away, and the scroll offset with it.
+    # The repaint runs after every response, so every single click bounced the
+    # panel back to the top; testers had to scroll down again to reach the
+    # button they had just used, on every action.
+    force_repaint = html[html.index("function forceRepaint"):html.index("function scheduleRepaint")]
+    assert "scrollTop" in force_repaint
+    rebuild = force_repaint.index('body.style.display = "none"')
+    assert force_repaint.index("scroller.scrollTop", rebuild) > rebuild, "restore the offset after the rebuild"
+
+
+def test_the_repaint_signature_notices_an_image_that_changed():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Comparing text alone missed a change that is purely an image: re-rendering
+    # a scene updates the preview's picture while every word around it stays
+    # identical, so no repaint was requested and the old picture stayed up.
+    signature = html[html.index("function contentSignature"):html.index("// Only ask when")]
+    assert "getElementsByTagName(\"img\")" in signature
+    # Fingerprinted, not held: these sources are base64 data URIs running to
+    # megabytes each.
+    assert "source.length" in signature
+
+
+def test_a_summary_preview_cannot_outlive_what_it_describes():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Switching documents left one fixture's rendered image on screen beneath
+    # another fixture's scene list, with nothing saying the picture belonged to
+    # a different document. The preview is a snapshot of YAML and PNGs read at
+    # one moment; it is only true of the state it was built from.
+    assert "function markSummaryPreviewStale" in html
+    stale = html[html.index("function markSummaryPreviewStale"):html.index("function documentContext")]
+    assert "previewContext = null" in stale
+    render_state = html[html.index("function renderState"):html.index("function renderIdentity")]
+    assert "markSummaryPreviewStale()" in render_state
+    # A mutation changes the files the preview was built from, so it goes stale
+    # then too. Refresh passes "" and leaves the preview alone.
+    status = html[html.index("function requestStatus"):html.index("function requestIdentityStatus")]
+    assert 'if (retain !== "") { markSummaryPreviewStale(); }' in status
+
+
+def test_the_scene_editor_closes_when_its_scene_is_no_longer_listed():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # The editor holds a scene id, not a scene. Switching documents left the
+    # previous document's scene open for editing, with Save Metadata pointed at
+    # a manifest that no longer contains it.
+    scenes = html[html.index("function renderScenes"):html.index("function sceneIsListed")]
+    assert "sceneIsListed(project, selectedSceneId)" in scenes
+    assert "elements.sceneEditor.hidden = true" in scenes
+
+
+def test_script_errors_name_something_and_reach_the_fusion_log():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # "Palette script error: Script error." named nothing, and Text Commands
+    # held no matching line, so there was nothing left to investigate. Hosts
+    # mask the message on a script they treat as cross-origin, but the location
+    # arguments and the error object usually survive that masking.
+    handler = html[html.index("window.onerror"):html.index("// ---- forced repaint")]
+    for argument in ("lineNumber", "columnNumber", "error.stack"):
+        assert argument in handler, argument
+    # Only the add-in can write to Fusion's log, and the page has no other way in.
+    assert 'transmit("system.log"' in handler
+    assert "LOG_REQUEST_ID" in handler
+    # Its answer must not be read as the answer to the user's in-flight request.
+    handle_raw = html[html.index("function handleRaw"):html.index("window.fusionJavaScriptHandler")]
+    assert "LOG_REQUEST_ID" in handle_raw
+
+
+def test_linked_component_ids_are_reported_as_unsaveable():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Round-4 S4.2: Fusion stores a linked component's stable ID in that
+    # component's own document, which saving this assembly does not save. The
+    # ID comes back missing every session and nothing said why.
+    identity = html[html.index("function renderIdentity"):html.index("function describeError")]
+    assert "linked_components" in identity
+    assert "linked from other documents" in identity
+    assert "describeLabels(" in identity
+    # The click that assigns them is when the user expects saving to work.
+    ensure = html[html.index('elements.ensureIds.addEventListener'):html.index('elements.repairIds.addEventListener')]
+    assert "assigned.linked_components" in ensure
+
+
 def test_controller_url_points_at_the_document(monkeypatch):
     controller_module = _palette_controller(monkeypatch)
 

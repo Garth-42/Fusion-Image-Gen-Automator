@@ -8,6 +8,7 @@ PROTOCOL_VERSION = 1
 ALLOWED_ACTIONS = frozenset([
     "system.ping",
     "system.repaint",
+    "system.log",
     "project.status",
     "project.initialize",
     "project.open",

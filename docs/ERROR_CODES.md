@@ -47,7 +47,7 @@ its connection-status line.
 | `OPACITY_REPLAY_UNSUPPORTED` | Requested opacity state cannot be replayed safely |
 | `STATE_RESTORE_FAILED` | Pre-operation Fusion state could not be fully restored |
 | `STATE_NOT_CAPTURED` | No in-memory state preview is available to apply |
-| `RENDER_FAILED` | Fusion image export failed |
+| `RENDER_FAILED` | Fusion image export failed, or reported success without writing the image |
 | `OPERATION_IN_PROGRESS` | Another state-mutating operation owns the lock |
 
 ## Warnings

@@ -97,6 +97,38 @@ def test_summary_builds_escaped_html_document_for_project_scenes(tmp_path):
     assert scene["scene_id"] in result["body_html"]
 
 
+def test_palette_body_embeds_the_thumbnail_and_the_document_embeds_the_render(tmp_path):
+    """The palette gets 480x320, the exportable document keeps 2400x1600.
+
+    Both used to carry the full render, base64-encoded into the palette's
+    ``innerHTML`` — megabytes per scene, and round-4 S5.5 found a scene whose
+    picture never appeared in the preview at all.
+    """
+    root, fusion, settings, scene = _project(tmp_path)
+    manifest = yaml_store.load(root / "manual.yaml")
+    scene_payload = yaml_store.load(root / manifest["project"]["scenes"][0]["file"])
+    yaml_store.project_path(root, scene_payload["output"]["image_file"]).write_bytes(b"full render")
+    yaml_store.project_path(root, scene_payload["output"]["thumbnail_file"]).write_bytes(b"thumbnail")
+
+    result = PreviewService(fusion, settings).summary({})
+
+    assert "data:image/png;base64,dGh1bWJuYWls" in result["body_html"]
+    assert "data:image/png;base64,ZnVsbCByZW5kZXI=" not in result["body_html"]
+    assert "data:image/png;base64,ZnVsbCByZW5kZXI=" in result["html"]
+
+
+def test_palette_body_falls_back_to_the_render_when_no_thumbnail_exists(tmp_path):
+    root, fusion, settings, scene = _project(tmp_path)
+    manifest = yaml_store.load(root / "manual.yaml")
+    scene_payload = yaml_store.load(root / manifest["project"]["scenes"][0]["file"])
+    yaml_store.project_path(root, scene_payload["output"]["image_file"]).write_bytes(b"full render")
+
+    result = PreviewService(fusion, settings).summary({})
+
+    # Showing nothing here would read as a render that failed.
+    assert "data:image/png;base64,ZnVsbCByZW5kZXI=" in result["body_html"]
+
+
 def test_summary_requires_open_project_root(tmp_path):
     fusion = FakeFusion()
     service = PreviewService(fusion, FakeSettings(None))

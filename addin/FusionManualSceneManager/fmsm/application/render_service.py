@@ -6,7 +6,7 @@ from pathlib import Path
 from fmsm.application.errors import ServiceError
 from fmsm.application.services import MANIFEST_FILE
 from fmsm.domain.validation import validate_manifest, validate_scene
-from fmsm.infrastructure import yaml_store
+from fmsm.infrastructure import atomic_write, yaml_store
 
 
 class RenderService(object):
@@ -52,14 +52,8 @@ class RenderService(object):
         try:
             apply_result = self._fusion.apply_scene_state(scene, records)
             self._fusion.refresh_viewport()
-            self._fusion.export_viewport_png(str(final_path), output["width_px"], output["height_px"], output.get("transparent_background", True), output.get("anti_alias", True))
-            self._fusion.export_viewport_png(str(thumbnail_path), output["thumbnail_width_px"], output["thumbnail_height_px"], output.get("transparent_background", True), output.get("anti_alias", True))
-            # Fusion's image export can report success while writing nothing —
-            # for example into a read-only output folder — so a returned "ok" is
-            # not proof of a file. Confirm both images actually landed on disk;
-            # otherwise the palette would show a success with no render behind it.
-            self._require_written(final_path)
-            self._require_written(thumbnail_path)
+            self._export_png(final_path, output["width_px"], output["height_px"], output)
+            self._export_png(thumbnail_path, output["thumbnail_width_px"], output["thumbnail_height_px"], output)
         except ServiceError:
             raise
         except Exception as error:
@@ -77,16 +71,51 @@ class RenderService(object):
             "warnings": (apply_result or {}).get("warnings", []),
         }
 
-    @staticmethod
-    def _require_written(path):
+    def _export_png(self, destination, width_px, height_px, output):
+        """Export one image through a staging file, then move it into place.
+
+        Fusion's image export can report success while writing nothing — a
+        read-only output folder is the case testers hit — so the returned "ok"
+        is not proof of a file. Checking the destination afterwards is not proof
+        either, and that is the sharper half: re-rendering a scene whose PNG was
+        already on disk found the *previous* render's file, called that a
+        success, and reported the usual "Rendered …" message while nothing had
+        been written (round-4 S2.4/S3.2). Only a path that cannot pre-exist can
+        answer whether this export wrote anything, so export to a staging file
+        and require *that* to appear.
+
+        Moving the finished file into place afterwards also means a failed
+        render leaves the previous good image untouched instead of truncating
+        it, and that the destination never exists in a half-written state.
+        """
+        staging = atomic_write.staging_path(destination)
         try:
-            written = path.is_file() and path.stat().st_size > 0
+            self._fusion.export_viewport_png(
+                str(staging), width_px, height_px,
+                output.get("transparent_background", True), output.get("anti_alias", True),
+            )
+            self._require_written(staging, destination)
+            try:
+                atomic_write.commit(staging, destination)
+            except OSError as error:
+                raise ServiceError(
+                    "RENDER_FAILED",
+                    "Fusion rendered the image but it could not be written to %s: %s. "
+                    "Confirm the file and its folder are writable." % (destination, error),
+                )
+        finally:
+            atomic_write.discard(staging)
+
+    @staticmethod
+    def _require_written(staging, destination):
+        try:
+            written = staging.is_file() and staging.stat().st_size > 0
         except OSError:
             written = False
         if not written:
             raise ServiceError(
                 "RENDER_FAILED",
-                "Fusion reported success but no image was written to %s. Confirm the output folder is writable." % path,
+                "Fusion reported success but no image was written for %s. Confirm the output folder is writable." % destination,
             )
 
     def _require_project(self):

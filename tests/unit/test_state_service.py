@@ -64,7 +64,12 @@ def test_capture_and_apply_current_state_are_user_reachable_handlers():
     service = SceneStateService(fusion)
 
     assert service.capture_current({}) == {"captured": True, "occurrences": 0, "components": 0}
-    assert service.apply_captured({}) == {"warnings": []}
+    # Apply answers in the capture's shape. It used to return the guard's
+    # warnings alone, so the palette read counts that were never sent and told
+    # the user "Captured state contains undefined occurrence(s)".
+    assert service.apply_captured({}) == {
+        "captured": False, "occurrences": 0, "components": 0, "applied": True, "warnings": [],
+    }
 
 
 def test_apply_validates_references_before_capturing_or_mutating():

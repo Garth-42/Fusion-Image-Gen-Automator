@@ -220,6 +220,48 @@ def test_export_viewport_png_rejects_a_reported_save_that_wrote_no_file(monkeypa
         environment.export_viewport_png(str(target), 2400, 1600, True, True)
 
 
+def test_identity_records_flag_components_that_live_in_another_document(monkeypatch):
+    """Round-4 S4.2: an ID assigned to a linked component cannot be saved here.
+
+    Fusion keeps a referenced component's attributes in that component's own
+    document, so the identity report has to say which components those are.
+    """
+    adapter = _adapter_module(monkeypatch)
+
+    class _NoAttributes(object):
+        def itemByName(self, group, name):
+            return None
+
+    class _Component(object):
+        def __init__(self, name):
+            self.name = name
+            self.entityToken = name + "-token"
+            self.partNumber = name
+            self.attributes = _NoAttributes()
+
+    class _Referenceable(object):
+        def __init__(self, name, referenced):
+            self.name = name + ":1"
+            self.component = _Component(name)
+            self.attributes = _NoAttributes()
+            if referenced is not None:
+                self.isReferencedComponent = referenced
+
+    root = type("Root", (), {"allOccurrences": [
+        _Referenceable("Local", False),
+        _Referenceable("Linked", True),
+        _Referenceable("OlderFusion", None),  # property absent entirely
+    ]})()
+    environment = adapter.FusionEnvironment()
+    environment._root_component = lambda: root
+
+    records = environment.identity_records()
+
+    # A Fusion build that does not expose the property must not take the whole
+    # identity report down with it; an unknown answer is reported as "not linked".
+    assert [item["component_is_referenced"] for item in records] == [False, True, False]
+
+
 class _NativeComponent(object):
     """Mirrors Fusion's Component: a read/write ``opacity`` override and,
     deliberately, no ``createForAssemblyContext``. That method does not exist on

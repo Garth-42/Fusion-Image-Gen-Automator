@@ -61,6 +61,7 @@ class IdentityService(object):
         records = self._records()
         assigned_occurrences = 0
         assigned_components = 0
+        assigned_linked = []
         seen_components = set()
         for record in records:
             if not valid_uuid(record.get("occurrence_id")):
@@ -74,8 +75,16 @@ class IdentityService(object):
             if not valid_uuid(record.get("component_id")):
                 self._write_component_id(component_handle, str(uuid.uuid4()))
                 assigned_components += 1
+                if record.get("component_is_referenced"):
+                    assigned_linked.append(record["component_label"])
         summary = self._summary(self._records())
-        summary["assigned"] = {"occurrences": assigned_occurrences, "components": assigned_components}
+        summary["assigned"] = {
+            "occurrences": assigned_occurrences,
+            "components": assigned_components,
+            # Named separately because "save the document" is about to not work
+            # for these, and this is the moment the user expects it to.
+            "linked_components": assigned_linked,
+        }
         return summary
 
     def repair_duplicates(self, payload):
@@ -136,7 +145,8 @@ class IdentityService(object):
 
     @staticmethod
     def _summary(records):
-        report = identity_report(_primary_component_records(records))
+        primary = _primary_component_records(records)
+        report = identity_report(primary)
         blocking = []
         if report["duplicate_occurrences"]:
             blocking.append("DUPLICATE_OCCURRENCE_ID")
@@ -144,7 +154,8 @@ class IdentityService(object):
             blocking.append("DUPLICATE_COMPONENT_ID")
         return {
             "occurrences": len(records),
-            "components": len(_primary_component_records(records)),
+            "components": len(primary),
+            "linked_components": _linked_component_labels(primary),
             "missing": {
                 "occurrences": report["missing_occurrences"],
                 "components": report["missing_components"],
@@ -176,6 +187,22 @@ def _describe(entries):
     if len(names) > _MAX_REPORTED_LABELS:
         shown.append("and %d more" % (len(names) - _MAX_REPORTED_LABELS))
     return "%d %s" % (len(names), "entity" if len(names) == 1 else "entities"), ", ".join(shown)
+
+
+def _linked_component_labels(primary_records):
+    """Name the components whose stable ID this document cannot keep.
+
+    Fusion stores an externally referenced component's attributes in that
+    component's own document. ``Ensure IDs`` therefore writes the component UUID
+    into a document that saving *this* assembly does not save, and the ID is
+    gone at the next launch — round-4 S4.2 watched a freshly assigned ID vanish
+    across two full restarts, through two different save procedures, while
+    Fusion reported the assembly as saved and said nothing. The add-in cannot
+    persist it and cannot honestly claim the documented "Ensure IDs, then save"
+    workflow covers it, so it names the components instead of letting them
+    silently come back missing every session.
+    """
+    return [record["component_label"] for record in primary_records if record.get("component_is_referenced")]
 
 
 def _primary_component_records(records):

@@ -18,7 +18,7 @@ def _request(action, payload=None):
 
 def test_project_actions_are_allowed():
     assert {
-        "system.ping", "system.repaint", "project.status", "project.initialize", "project.open",
+        "system.ping", "system.repaint", "system.log", "project.status", "project.initialize", "project.open",
         "identity.status", "identity.ensure_ids", "identity.repair_duplicates",
         "state.capture_current", "state.apply_captured", "state.restore", "preview.summary",
         "scene.list", "scene.get", "scene.load", "scene.create_from_current", "scene.update_metadata",
