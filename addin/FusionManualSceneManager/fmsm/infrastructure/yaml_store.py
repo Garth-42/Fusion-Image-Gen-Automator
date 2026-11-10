@@ -14,7 +14,11 @@ from fmsm.infrastructure.atomic_write import atomic_write_text
 
 
 class StoreError(ValueError):
-    pass
+    """A storage failure; ``code`` is the stable error code to show for it."""
+
+    def __init__(self, message, code="YAML_PARSE_FAILED"):
+        super(StoreError, self).__init__(message)
+        self.code = code
 
 
 def project_path(root, relative_path):
@@ -23,13 +27,13 @@ def project_path(root, relative_path):
     try:
         candidate.relative_to(root)
     except ValueError:
-        raise StoreError("OUTPUT_PATH_UNSAFE")
+        raise StoreError("OUTPUT_PATH_UNSAFE", "OUTPUT_PATH_UNSAFE")
     return candidate
 
 
 def _reject_nonfinite(value):
     if isinstance(value, float) and not math.isfinite(value):
-        raise StoreError("Non-finite floats cannot be persisted.")
+        raise StoreError("Non-finite floats cannot be persisted.", "NON_FINITE_VALUE")
     if isinstance(value, dict):
         for child in value.values():
             _reject_nonfinite(child)

@@ -21,8 +21,15 @@ class FusionEnvironmentPort(object):
         """Show a yes/no question and return the user's choice as a bool."""
         raise NotImplementedError
 
-    def choose_folder(self, title):
-        """Show a folder picker; return an absolute path, or ``None`` on cancel."""
+    def choose_folder(self, title, initial_directory=None):
+        """Show a folder picker; return an absolute path, or ``None`` on cancel.
+
+        ``initial_directory`` is where the picker starts, when it exists.
+        """
+        raise NotImplementedError
+
+    def choose_file(self, title, file_filter, initial_directory=None, initial_filename=None):
+        """Show an open-file dialog; return an absolute path, or ``None`` on cancel."""
         raise NotImplementedError
 
     def read_project_id(self):

@@ -17,6 +17,12 @@ its connection-status line.
 | `NO_ACTIVE_FUSION_DESIGN` | Active document is not a supported Fusion design |
 | `PROJECT_NOT_ASSOCIATED` | Active document has no project association |
 | `PROJECT_ROOT_UNRESOLVED` | Local path mapping is missing or invalid |
+| `PROJECT_FILE_INVALID` | The file chosen in Open Project File is not named `manual.yaml` |
+| `PROJECT_FILE_NOT_FOUND` | The chosen or remembered project file no longer exists |
+| `PROJECT_WRITE_FAILED` | A project file or folder could not be written (permissions, disk full) |
+| `SETTINGS_WRITE_FAILED` | The machine-local settings file could not be saved |
+| `NON_FINITE_VALUE` | A NaN or infinite number was refused before it could be written to YAML |
+| `IDENTITY_IDS_MISSING` | Parts lack stable IDs, so a scene captured now could not be replayed |
 | `PROJECT_ROOT_NOT_EMPTY` | Selected folder already contains a manual project |
 | `PROJECT_TITLE_INVALID` | Project title is empty or longer than 200 characters |
 | `PROJECT_NOT_OPEN` | Scene operation was requested before a project was initialized or opened |
@@ -62,4 +68,4 @@ its connection-status line.
 | `OUTPUT_IMAGE_MISSING` | Scene is valid but has no final image |
 | `THUMBNAIL_MISSING` | Scene is valid but has no thumbnail |
 | `SOURCE_DOCUMENT_MISMATCH` | Scene source metadata differs from active document |
-| `SCENE_ASSET_MISSING` | A generated image referenced by a deleted scene was already absent |
+| `SCENE_FILE_NOT_DELETED` | The scene was removed from the manifest but one of its files could not be deleted |

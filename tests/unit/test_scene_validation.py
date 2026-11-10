@@ -85,3 +85,11 @@ def test_perspective_scene_requires_positive_angle():
     scene["camera"]["perspective_angle_rad"] = 0
 
     assert _codes(scene) == ["CAMERA_INVALID"]
+
+
+def test_a_non_string_status_is_reported_rather_than_raising():
+    scene = _valid_scene()
+    # Hand-edited YAML can put a list here; a list is unhashable, and testing
+    # it for set membership used to raise TypeError out of the validator.
+    scene["scene"]["status"] = ["draft"]
+    assert "SCENE_STATUS_INVALID" in _codes(scene)

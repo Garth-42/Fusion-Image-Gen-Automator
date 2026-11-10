@@ -194,6 +194,54 @@ def test_mutation_outcomes_survive_the_refresh_fired_behind_them():
     assert 'if (!isBackgroundRefresh) { retainedFeedback = ""; }' in send_request
 
 
+def test_document_opens_projects_by_file_and_offers_the_remembered_one():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    for element_id in ("open-project", "switch-project", "reopen-project", "remembered-project-file", "project-file"):
+        assert 'id="%s"' % element_id in html
+    assert "Open Project File" in html
+    assert "manual.yaml" in html
+    # The reopen path is chosen by the add-in from its own settings; the page
+    # only says "use it" and never sends a filesystem path of its own.
+    assert "use_remembered" in html
+    assert "remembered_project_file" in html
+    open_project = html[html.index("function openProject"):html.index("function onEnter")]
+    assert "path" not in open_project.lower()
+
+
+def test_scene_list_fetches_thumbnails_separately_from_status():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    assert "scene.thumbnails" in html
+    assert "thumbnail_version" in html
+    # Fetched after the refresh chain, and cached by version so a refresh that
+    # changed nothing transfers no image bytes.
+    assert "thumbnailCache" in html
+    chain = html[html.index("function continueRefreshChain"):html.index("function requestMissingThumbnails")]
+    assert "requestMissingThumbnails()" in chain
+    # A thumbnail arriving changes pixels but no text, so it has to count as a
+    # content change for the native repaint request.
+    assert "visualRevision += 1" in html
+
+
+def test_every_button_is_disabled_while_a_request_is_in_flight():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    # Requests are dropped while one is pending. Per-scene buttons used to stay
+    # enabled, so clicking one mid-request silently did nothing.
+    set_busy = html[html.index("function setBusy"):html.index("function paintFeedback")]
+    assert 'document.getElementsByTagName("button")' in set_busy
+
+
+def test_editor_guards_unsaved_text():
+    html = DOCUMENT.read_text(encoding="utf-8")
+
+    assert 'id="editor-dirty"' in html
+    assert "function confirmDiscardEdits" in html
+    load_scene = html[html.index("function loadScene("):html.index("function loadSceneState")]
+    assert "confirmDiscardEdits()" in load_scene
+
+
 def test_controller_url_points_at_the_document(monkeypatch):
     controller_module = _palette_controller(monkeypatch)
 

@@ -274,3 +274,64 @@ class _Matrix(object):
 
     def setWithArray(self, values):
         self.values = list(values)
+
+
+class _FakeDialog(object):
+    def __init__(self, result, filename="", folder=""):
+        self._result = result
+        self.filename = filename
+        self.folder = folder
+        self.initialDirectory = None
+        self.initialFilename = None
+
+    def showOpen(self):
+        return self._result
+
+    def showDialog(self):
+        return self._result
+
+
+def _dialog_environment(monkeypatch, dialog):
+    adapter = _adapter_module(monkeypatch)
+    sys.modules["adsk.core"].DialogResults = types.SimpleNamespace(DialogOK=0, DialogCancel=1)
+    ui = types.SimpleNamespace(createFileDialog=lambda: dialog, createFolderDialog=lambda: dialog)
+    environment = adapter.FusionEnvironment()
+    monkeypatch.setattr(environment, "_app", lambda: types.SimpleNamespace(userInterface=ui))
+    return environment
+
+
+def test_choose_file_starts_in_the_remembered_folder_and_returns_the_pick(monkeypatch, tmp_path):
+    dialog = _FakeDialog(0, filename=str(tmp_path / "manual.yaml"))
+    environment = _dialog_environment(monkeypatch, dialog)
+
+    chosen = environment.choose_file("Open", "Manual project files (*.yaml)", str(tmp_path), "manual.yaml")
+
+    assert chosen == str(tmp_path / "manual.yaml")
+    assert dialog.title == "Open"
+    assert dialog.filter == "Manual project files (*.yaml)"
+    assert dialog.isMultiSelectEnabled is False
+    assert dialog.initialDirectory == str(tmp_path)
+    assert dialog.initialFilename == "manual.yaml"
+
+
+def test_choose_file_does_not_point_the_dialog_at_a_folder_that_is_gone(monkeypatch, tmp_path):
+    dialog = _FakeDialog(0, filename=str(tmp_path / "manual.yaml"))
+    environment = _dialog_environment(monkeypatch, dialog)
+
+    environment.choose_file("Open", "Manual project files (*.yaml)", str(tmp_path / "deleted"), "manual.yaml")
+
+    assert dialog.initialDirectory is None
+    assert dialog.initialFilename is None
+
+
+def test_choose_file_returns_none_when_cancelled(monkeypatch, tmp_path):
+    environment = _dialog_environment(monkeypatch, _FakeDialog(1, filename="ignored"))
+    assert environment.choose_file("Open", "Manual project files (*.yaml)") is None
+
+
+def test_choose_folder_starts_in_the_given_folder(monkeypatch, tmp_path):
+    dialog = _FakeDialog(0, folder=str(tmp_path))
+    environment = _dialog_environment(monkeypatch, dialog)
+
+    assert environment.choose_folder("Pick", str(tmp_path)) == str(tmp_path)
+    assert dialog.initialDirectory == str(tmp_path)

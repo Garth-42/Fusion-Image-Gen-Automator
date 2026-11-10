@@ -105,3 +105,28 @@ def test_summary_requires_open_project_root(tmp_path):
         service.summary({})
 
     assert error.value.code == "PROJECT_ROOT_UNRESOLVED"
+
+
+def test_summary_embeds_the_thumbnail_rather_than_the_full_render(tmp_path):
+    root, fusion, settings, scene = _project(tmp_path)
+    manifest = yaml_store.load(root / "manual.yaml")
+    output = yaml_store.load(root / manifest["project"]["scenes"][0]["file"])["output"]
+    yaml_store.project_path(root, output["image_file"]).write_bytes(b"full size render")
+    yaml_store.project_path(root, output["thumbnail_file"]).write_bytes(b"fake png")
+
+    body = PreviewService(fusion, settings).summary({})["body_html"]
+
+    # Every embedded byte crosses the palette bridge as base64 in one message.
+    assert "data:image/png;base64,ZmFrZSBwbmc=" in body
+    assert body.count("data:image/png;base64,") == 1
+
+
+def test_summary_reports_a_corrupt_scene_file_with_a_stable_code(tmp_path):
+    root, fusion, settings, scene = _project(tmp_path)
+    (root / scene["file"]).write_text("scene: [unterminated\n", encoding="utf-8")
+
+    with pytest.raises(ServiceError) as error:
+        PreviewService(fusion, settings).summary({})
+
+    assert error.value.code == "YAML_PARSE_FAILED"
+    assert error.value.details["scene_id"] == scene["scene_id"]

@@ -3,12 +3,9 @@ from __future__ import absolute_import
 
 import base64
 import html
-from pathlib import Path
 
+from fmsm.application import project_access
 from fmsm.application.errors import ServiceError
-from fmsm.application.services import MANIFEST_FILE
-from fmsm.domain.validation import validate_manifest, validate_scene
-from fmsm.infrastructure import yaml_store
 
 
 class PreviewService(object):
@@ -27,21 +24,7 @@ class PreviewService(object):
         return {"html": self._html(manifest, body_html), "body_html": body_html, "title": manifest["project"]["title"]}
 
     def _require_project(self):
-        document = self._fusion.active_document()
-        if document is None:
-            raise ServiceError("NO_ACTIVE_FUSION_DESIGN", "Open the documentation assembly before previewing scenes.")
-        project_id = self._fusion.read_project_id()
-        if project_id is None:
-            raise ServiceError("PROJECT_NOT_OPEN", "Initialize or open a manual project before previewing scenes.")
-        root = self._settings.project_root(project_id)
-        if root is None or not (Path(root) / MANIFEST_FILE).is_file():
-            raise ServiceError("PROJECT_ROOT_UNRESOLVED", "Open the manual project folder before previewing scenes.")
-        manifest = yaml_store.load(Path(root) / MANIFEST_FILE)
-        issues = validate_manifest(manifest)
-        if issues:
-            issue = issues[0]
-            raise ServiceError(issue.code, issue.message, {"path": issue.path})
-        return root, manifest
+        return project_access.require_project(self._fusion, self._settings, "previewing scenes")
 
     def _html(self, manifest, body_html):
         return "\n".join([
@@ -65,18 +48,19 @@ class PreviewService(object):
         return "\n".join(parts)
 
     def _scene_html(self, root, entry, index):
-        scene = yaml_store.load(yaml_store.project_path(root, entry["file"]))
-        issues = validate_scene(scene)
-        if issues:
-            issue = issues[0]
-            raise ServiceError(issue.code, issue.message, {"path": issue.path, "scene_id": entry["scene_id"]})
+        try:
+            scene = project_access.load_scene(root, entry["file"])
+        except ServiceError as error:
+            details = dict(error.details)
+            details["scene_id"] = entry["scene_id"]
+            raise ServiceError(error.code, error.message, details)
         metadata = scene["scene"]
         output = scene.get("output") or {}
         return [
             "<article>",
             "<h2>%d. %s</h2>" % (index, _escape(metadata.get("title", "Untitled scene"))),
             "<p class=\"meta\">Status: %s | Scene ID: %s</p>" % (_escape(metadata.get("status", "draft")), _escape(entry["scene_id"])),
-            self._image_html(root, output.get("image_file", ""), "Rendered image"),
+            self._image_html(root, output, "Rendered image"),
             _section("Description", metadata.get("description", "")),
             _section("Purpose", metadata.get("purpose", "")),
             _pre_section("Instructions", metadata.get("instructions_markdown", "")),
@@ -85,14 +69,24 @@ class PreviewService(object):
         ]
 
 
-    def _image_html(self, root, relative, alt):
-        if not relative:
-            return ""
-        path = yaml_store.project_path(root, relative)
-        if not path.is_file():
-            return ""
-        data = base64.b64encode(path.read_bytes()).decode("ascii")
-        return "<figure><img alt=\"%s\" src=\"data:image/png;base64,%s\" style=\"max-width:100%%;height:auto\"></figure>" % (_escape(alt), data)
+    def _image_html(self, root, output, alt):
+        # Embed the thumbnail, not the final render. The preview is shown in a
+        # palette a few hundred pixels wide, and every embedded byte crosses the
+        # palette bridge as base64 inside one JSON message; full-size renders
+        # made that message tens of megabytes for a modest project.
+        for key in ("thumbnail_file", "image_file"):
+            relative = output.get(key)
+            if not relative:
+                continue
+            path = project_access.safe_path(root, relative)
+            if not path.is_file():
+                continue
+            try:
+                data = base64.b64encode(path.read_bytes()).decode("ascii")
+            except OSError:
+                continue
+            return "<figure><img alt=\"%s\" src=\"data:image/png;base64,%s\" style=\"max-width:100%%;height:auto\"></figure>" % (_escape(alt), data)
+        return ""
 
 
 def _section(title, value):

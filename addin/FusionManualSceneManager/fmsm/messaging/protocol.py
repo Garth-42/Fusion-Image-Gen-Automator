@@ -27,6 +27,7 @@ ALLOWED_ACTIONS = frozenset([
     "scene.duplicate",
     "scene.delete",
     "scene.reorder",
+    "scene.thumbnails",
     "scene.render",
     "scene.render_all",
 ])

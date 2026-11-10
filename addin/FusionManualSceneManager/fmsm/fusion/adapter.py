@@ -53,12 +53,29 @@ class FusionEnvironment(FusionEnvironmentPort):
         )
         return result == adsk.core.DialogResults.DialogYes
 
-    def choose_folder(self, title):
+    def choose_folder(self, title, initial_directory=None):
         dialog = self._app().userInterface.createFolderDialog()
         dialog.title = title
+        if initial_directory and Path(initial_directory).is_dir():
+            dialog.initialDirectory = str(initial_directory)
         if dialog.showDialog() != adsk.core.DialogResults.DialogOK:
             return None
         return dialog.folder
+
+    def choose_file(self, title, file_filter, initial_directory=None, initial_filename=None):
+        dialog = self._app().userInterface.createFileDialog()
+        dialog.title = title
+        dialog.filter = file_filter
+        dialog.isMultiSelectEnabled = False
+        if initial_directory and Path(initial_directory).is_dir():
+            dialog.initialDirectory = str(initial_directory)
+            # Only suggest a name alongside a folder it is known to live in;
+            # a bare name against the dialog's own default folder is noise.
+            if initial_filename:
+                dialog.initialFilename = initial_filename
+        if dialog.showOpen() != adsk.core.DialogResults.DialogOK:
+            return None
+        return dialog.filename or None
 
     def read_project_id(self):
         attribute = self._document().attributes.itemByName(ATTRIBUTE_GROUP, PROJECT_ID_ATTRIBUTE)

@@ -151,6 +151,8 @@ The YAML store owns:
 
 A machine-local settings file maps immutable project IDs to local repository roots. This prevents machine-specific paths from entering Git or cloud document metadata.
 
+The same file remembers, per CAD document (keyed by the document's stable data-file ID, never its name), the `manual.yaml` project file last opened with it. That memory seeds the Open Project File dialog and lets the palette offer a one-click reopen when the project link was never saved into the Fusion document.
+
 Example:
 
 ```json

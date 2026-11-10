@@ -69,6 +69,18 @@ Do not load all thumbnail bytes at project-open time.
 6. Add-in creates files/directories and associates project UUID.
 7. Palette opens empty scene list and highlights **New Scene**.
 
+## 4.3a Open-project flow
+
+A project is opened by choosing its project file, `manual.yaml`; the folder containing that file is the project folder.
+
+1. User clicks **Open Project File…**.
+2. A file dialog opens in the folder remembered for the active CAD document, falling back to the folder of the project the document is linked to, then to the most recently used project location.
+3. A file not named `manual.yaml` is rejected with `PROJECT_FILE_INVALID`.
+4. If the document is already linked to a different project, a Fusion dialog asks before re-linking it.
+5. The chosen location is remembered for that CAD document in machine-local settings.
+
+When a document has no saved project link but a remembered project file still exists, the palette offers **Reopen This Project**, which skips the dialog. Unsaved documents have no stable identity and are not remembered individually.
+
 ## 4.4 Create-scene flow
 
 1. User arranges the Fusion view.

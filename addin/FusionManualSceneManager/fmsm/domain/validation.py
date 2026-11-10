@@ -60,7 +60,10 @@ def validate_scene(scene):
     title = scene_data.get("title")
     if not isinstance(title, str) or not 1 <= len(title) <= 200:
         issues.append(_scene_issue("SCENE_TITLE_INVALID", "Scene title must be 1-200 characters.", "scene.title"))
-    if scene_data.get("status") not in _SCENE_STATUSES:
+    status = scene_data.get("status")
+    # isinstance first: a hand-edited list or mapping here is unhashable, and
+    # the membership test alone would raise instead of reporting the issue.
+    if not isinstance(status, str) or status not in _SCENE_STATUSES:
         issues.append(_scene_issue("SCENE_STATUS_INVALID", "Scene status is not supported.", "scene.status"))
     for key in ("description", "purpose", "instructions_markdown"):
         if not isinstance(scene_data.get(key, ""), str):

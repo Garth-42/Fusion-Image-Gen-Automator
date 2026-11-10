@@ -13,101 +13,224 @@
   visible, its script ran.
 -->
 <style>
-  :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  body { margin: 0; }
-  main { padding: 16px; }
-  h1 { font-size: 18px; margin: 0 0 16px; }
-  h2 { font-size: 14px; }
-  .notice { border-left: 3px solid #d97706; padding-left: 10px; line-height: 1.4; }
-  label { display: block; font-size: 13px; margin: 8px 0 4px; }
-  input[type="text"], textarea, select { box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit; }
-  textarea { min-height: 70px; resize: vertical; }
-  .summary-preview-content { border: 1px solid #9ca3af; padding: 12px; max-height: 520px; overflow: auto; background: Canvas; }
-  .summary-preview-content article { border-top: 1px solid #d1d5db; padding: 12px 0; }
-  .summary-preview-content .meta { color: #6b7280; }
-  .summary-preview-content pre { white-space: pre-wrap; background: rgba(127,127,127,0.12); padding: 8px; }
-  button { font: inherit; padding: 6px 12px; margin: 8px 8px 0 0; }
-  .scene-actions button { padding: 3px 8px; margin-top: 4px; }
-  ul { margin: 8px 0; padding-left: 20px; }
-  .warning-list li { line-height: 1.4; }
-  #project-feedback:empty, #project-warnings:empty { display: none; }
-  #project-feedback { border-left: 3px solid #6b7280; padding-left: 10px; line-height: 1.4; }
+  :root {
+    color-scheme: light dark;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    --bg: #f3f4f6; --card: #ffffff; --text: #111827; --muted: #5b6472; --line: #d5d9e0;
+    --accent: #0b6bcb; --accent-text: #ffffff; --field: #ffffff;
+    --warn-bg: #fff4d6; --warn-line: #b45309; --error-bg: #fde8e8; --error-line: #b91c1c;
+    --ok-bg: #e3f4e6; --ok-line: #15803d; --thumb: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1f2227; --card: #2a2e35; --text: #eef0f3; --muted: #a3acb9; --line: #454b56;
+      --accent: #4c9bf0; --accent-text: #0b1220; --field: #1f2227;
+      --warn-bg: #45370f; --warn-line: #f0b429; --error-bg: #4a1d1d; --error-line: #f38b8b;
+      --ok-bg: #173a22; --ok-line: #6dd58c; --thumb: #3a3f48;
+    }
+  }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.4; }
+  /* Room for the fixed message bar, so it never covers the last control. */
+  main { padding: 10px 10px 64px; }
+  h1 { font-size: 15px; margin: 0; }
+  h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  h3 { font-size: 13px; margin: 0 0 4px; }
+  p { margin: 0 0 8px; }
+  code { font-family: Consolas, Menlo, monospace; font-size: 12px; }
+  .app-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; margin: 2px 2px 10px; }
+  #connection-status { margin: 0; color: var(--muted); font-size: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .path { font-family: Consolas, Menlo, monospace; font-size: 12px; word-break: break-all; user-select: text; -webkit-user-select: text; }
+  .facts { margin: 0 0 8px; }
+  .facts div { display: flex; margin-bottom: 3px; }
+  .facts dt { flex: 0 0 76px; color: var(--muted); }
+  .facts dd { flex: 1 1 auto; margin: 0; min-width: 0; word-wrap: break-word; }
+  label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 3px; }
+  input[type="text"], textarea, select {
+    box-sizing: border-box; width: 100%; padding: 6px 8px; font: inherit;
+    color: var(--text); background: var(--field); border: 1px solid var(--line); border-radius: 4px;
+  }
+  textarea { min-height: 64px; resize: vertical; }
+  button {
+    font: inherit; padding: 5px 11px; margin: 6px 6px 0 0; cursor: pointer;
+    color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button.danger { color: var(--error-line); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; align-items: flex-start; }
+  .row input { flex: 1 1 auto; min-width: 0; }
+  .row button { flex: 0 0 auto; margin: 0 0 0 6px; padding: 6px 11px; white-space: nowrap; }
+  .toolbar { margin-top: 4px; }
+  .option { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+  .callout { background: var(--ok-bg); border-left: 3px solid var(--ok-line); border-radius: 4px; padding: 8px 10px; }
+  .callout p { margin-bottom: 4px; }
+  .warning-list { list-style: none; margin: 0 0 8px; padding: 0; }
+  .warning-list li { background: var(--warn-bg); border-left: 3px solid var(--warn-line); border-radius: 4px; padding: 6px 10px; margin-bottom: 4px; }
+  .warning-list:empty { display: none; }
+  #scene-search { margin-top: 10px; }
+  #scene-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .scene-row { display: flex; border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+  .scene-row.selected { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  .scene-row.broken { border-color: var(--error-line); }
+  .thumb {
+    flex: 0 0 96px; height: 64px; margin-right: 10px; border-radius: 4px; background: var(--thumb);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    color: var(--muted); font-size: 11px; text-align: center;
+  }
+  .thumb img { max-width: 100%; max-height: 100%; display: block; }
+  .scene-main { flex: 1 1 auto; min-width: 0; }
+  .scene-head { display: flex; align-items: baseline; }
+  .scene-name { flex: 1 1 auto; min-width: 0; font-weight: 600; word-wrap: break-word; }
+  .badge { flex: 0 0 auto; margin-left: 8px; padding: 0 7px; border: 1px solid var(--line); border-radius: 9px; font-size: 11px; color: var(--muted); }
+  .badge.status-approved { border-color: var(--ok-line); color: var(--ok-line); }
+  .badge.status-review { border-color: var(--warn-line); color: var(--warn-line); }
+  .scene-desc { margin: 2px 0 0; color: var(--muted); font-size: 12px; word-wrap: break-word; }
+  .scene-actions button { padding: 2px 8px; margin: 6px 4px 0 0; font-size: 12px; }
+  .subpanel { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+  .subpanel-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .subpanel-head button { margin: 0; }
+  #editor-dirty { color: var(--warn-line); font-size: 12px; margin-left: 4px; }
+  .summary-preview-content { border: 1px solid var(--line); border-radius: 4px; padding: 10px; margin-top: 8px; max-height: 520px; overflow: auto; background: var(--field); user-select: text; -webkit-user-select: text; }
+  .summary-preview-content h1 { font-size: 16px; margin-bottom: 4px; }
+  .summary-preview-content h2 { font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--text); }
+  .summary-preview-content article { border-top: 1px solid var(--line); padding: 10px 0; }
+  .summary-preview-content figure { margin: 6px 0; }
+  .summary-preview-content .meta { color: var(--muted); font-size: 12px; }
+  .summary-preview-content pre { white-space: pre-wrap; background: rgba(127,127,127,0.12); padding: 8px; border-radius: 4px; }
+  details summary { cursor: pointer; color: var(--muted); }
+  details[open] summary { margin-bottom: 8px; }
+  /* One message line for every action, pinned where it stays visible however
+     far the palette is scrolled. */
+  #project-feedback {
+    position: fixed; left: 0; right: 0; bottom: 0; margin: 0; padding: 8px 12px;
+    background: var(--card); border-top: 1px solid var(--line); border-left: 4px solid var(--muted);
+    max-height: 30vh; overflow: auto; user-select: text; -webkit-user-select: text;
+  }
+  #project-feedback:empty { display: none; }
+  #project-feedback.busy { border-left-color: var(--accent); }
+  #project-feedback.error { background: var(--error-bg); border-left-color: var(--error-line); }
+  #project-feedback.success { background: var(--ok-bg); border-left-color: var(--ok-line); }
 </style>
 </head>
 <body>
 <main>
-  <h1>Fusion Manual Scene Manager</h1>
-  <p class="notice">Use a dedicated documentation assembly. This add-in never saves your Fusion document automatically.</p>
-  <section>
-    <h2>Project</h2>
+  <div class="app-header">
+    <h1>Manual Scene Manager</h1>
     <p id="connection-status" aria-live="polite">Connecting to add-in…</p>
+  </div>
+
+  <section class="card">
+    <h2>Project</h2>
     <div id="project-panel" hidden>
-      <p id="document-line"></p>
-      <p id="project-summary"></p>
-      <div id="project-setup" hidden>
-        <label for="project-title">Project title</label>
-        <input id="project-title" type="text" maxlength="200" placeholder="e.g. Printer E-Box Assembly Guide">
-        <button id="initialize-project" type="button">Initialize Project…</button>
-        <button id="open-project" type="button">Open Project…</button>
-      </div>
-      <button id="refresh-status" type="button">Refresh</button>
-      <p id="project-feedback" aria-live="polite"></p>
+      <dl class="facts">
+        <div><dt>Document</dt><dd id="document-line"></dd></div>
+        <div><dt>Project</dt><dd id="project-summary"></dd></div>
+        <div id="project-file-row" hidden><dt>Project file</dt><dd id="project-file" class="path"></dd></div>
+      </dl>
       <ul id="project-warnings" class="warning-list"></ul>
+      <div id="project-setup" hidden>
+        <div id="remembered-project" class="callout" hidden>
+          <p>This document was last used with the project file:</p>
+          <p id="remembered-project-file" class="path"></p>
+          <button id="reopen-project" type="button" class="primary" title="Link this document to that project file again">Reopen This Project</button>
+        </div>
+        <div class="option">
+          <h3>Open an existing project</h3>
+          <p class="hint">Choose the project's <code>manual.yaml</code> file. Its location is remembered for this document, so the dialog starts there next time.</p>
+          <button id="open-project" type="button" title="Choose a manual.yaml file to open">Open Project File…</button>
+        </div>
+        <div class="option">
+          <h3>Start a new project</h3>
+          <label for="project-title">Project title</label>
+          <input id="project-title" type="text" maxlength="200" placeholder="e.g. Printer E-Box Assembly Guide">
+          <button id="initialize-project" type="button" title="Choose an empty folder; a manual.yaml project file is created in it">Create New Project…</button>
+          <p class="hint" style="margin-top:8px">Use a dedicated documentation assembly. This add-in never saves your Fusion document automatically.</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button id="switch-project" type="button" hidden title="Link this document to a different manual.yaml file">Open a Different Project File…</button>
+        <button id="refresh-status" type="button" title="Re-read the active document and the project files on disk">Refresh</button>
+      </div>
     </div>
   </section>
-  <section>
+
+  <section id="scenes-card" class="card" hidden>
     <h2>Scenes</h2>
-    <p id="scene-list-status">The scene-authoring workflow appears after project initialization.</p>
-    <label for="scene-title">New scene title</label>
-    <input id="scene-title" type="text" maxlength="200" placeholder="e.g. Install left DIN rail">
-    <button id="create-scene" type="button" hidden>Create Scene from Current State</button>
-    <button id="render-all-scenes" type="button" hidden>Render All Scenes</button>
-    <button id="preview-summary" type="button" hidden>Preview Summary</button>
+    <label for="scene-title">New scene from the current Fusion view</label>
+    <div class="row">
+      <input id="scene-title" type="text" maxlength="200" placeholder="Scene title, e.g. Install left DIN rail">
+      <button id="create-scene" type="button" class="primary" hidden title="Save the current camera, visibility, opacity and positions as a new scene">Create Scene</button>
+    </div>
+    <p id="scene-list-status" class="hint" style="margin-top:10px"></p>
+    <div id="scene-tools" class="toolbar" hidden>
+      <button id="render-all-scenes" type="button" hidden title="Render the final image and thumbnail for every scene, in order">Render All</button>
+      <button id="preview-summary" type="button" hidden title="Show every scene's image and text in order">Preview Manual</button>
+      <button id="restore-state" type="button" title="Put Fusion back the way it was before a scene was shown">Restore Previous View</button>
+    </div>
+    <input id="scene-search" type="text" placeholder="Filter scenes by title, description or status…" aria-label="Filter scenes" hidden>
     <ul id="scene-list" hidden></ul>
-    <div id="summary-preview-panel" hidden>
-      <h3>Scene Summary Preview</h3>
-      <button id="close-summary-preview" type="button">Close Preview</button>
+    <div id="summary-preview-panel" class="subpanel" hidden>
+      <div class="subpanel-head">
+        <h3>Manual Preview</h3>
+        <button id="close-summary-preview" type="button">Close Preview</button>
+      </div>
       <div id="summary-preview-content" class="summary-preview-content" role="document"></div>
     </div>
-    <div id="scene-editor" hidden>
-      <h3>Edit Selected Scene</h3>
-      <p id="selected-scene-file"></p>
+    <div id="scene-editor" class="subpanel" hidden>
+      <div class="subpanel-head">
+        <h3>Edit Scene <span id="editor-dirty" hidden>● Unsaved changes</span></h3>
+        <button id="close-scene-editor" type="button">Close</button>
+      </div>
+      <p id="selected-scene-file" class="path hint"></p>
       <label for="edit-scene-title">Title</label>
       <input id="edit-scene-title" type="text" maxlength="200">
       <label for="edit-scene-status">Status</label>
       <select id="edit-scene-status">
-        <option value="draft">draft</option>
-        <option value="review">review</option>
-        <option value="approved">approved</option>
-        <option value="obsolete">obsolete</option>
+        <option value="draft">Draft</option>
+        <option value="review">Review</option>
+        <option value="approved">Approved</option>
+        <option value="obsolete">Obsolete</option>
       </select>
       <label for="edit-scene-description">Description</label>
-      <textarea id="edit-scene-description"></textarea>
+      <textarea id="edit-scene-description" placeholder="What this picture shows"></textarea>
       <label for="edit-scene-purpose">Purpose</label>
-      <textarea id="edit-scene-purpose"></textarea>
+      <textarea id="edit-scene-purpose" placeholder="Why the reader needs it"></textarea>
       <label for="edit-scene-instructions">Instructions (Markdown)</label>
-      <textarea id="edit-scene-instructions"></textarea>
-      <button id="save-scene" type="button">Save Metadata</button>
-      <button id="update-scene-state" type="button">Update Graphics from Current State</button>
-      <button id="move-scene-up" type="button">Move Up</button>
-      <button id="move-scene-down" type="button">Move Down</button>
+      <textarea id="edit-scene-instructions" placeholder="1. First step&#10;2. Second step"></textarea>
+      <div class="toolbar">
+        <button id="save-scene" type="button" class="primary" title="Save the text fields above; the captured view is not changed">Save Text</button>
+        <button id="update-scene-state" type="button" title="Replace this scene's saved camera, visibility, opacity and positions with what Fusion shows now">Recapture from Current View</button>
+        <button id="move-scene-up" type="button" title="Move this scene earlier in the manual">Move Up</button>
+        <button id="move-scene-down" type="button" title="Move this scene later in the manual">Move Down</button>
+      </div>
     </div>
   </section>
-  <section id="identity-panel" hidden>
-    <h2>Stable IDs</h2>
-    <p id="identity-status">Checking managed occurrence and component IDs…</p>
-    <button id="ensure-ids" type="button">Ensure IDs</button>
-    <button id="repair-ids" type="button">Repair Duplicate IDs</button>
+
+  <section id="identity-panel" class="card" hidden>
+    <h2>Part IDs</h2>
+    <p id="identity-status">Checking part IDs…</p>
     <ul id="identity-details" class="warning-list"></ul>
+    <p class="hint">A scene finds its parts by hidden IDs stored in the Fusion document, so renaming or moving parts does not break it. Save the Fusion document after assigning IDs to keep them.</p>
+    <button id="ensure-ids" type="button" title="Give an ID to every part that does not have one yet">Ensure IDs</button>
+    <button id="repair-ids" type="button" hidden title="Give new IDs to parts that share one, for example after a copy and paste">Repair Duplicate IDs</button>
   </section>
-  <section id="state-panel" hidden>
-    <h2>Scene State Preview</h2>
-    <p id="state-status">Capture the current Fusion state to preview apply and restore.</p>
-    <button id="capture-state" type="button">Capture Current State</button>
-    <button id="apply-state" type="button">Apply Captured State</button>
-    <button id="restore-state" type="button">Restore Previous State</button>
+
+  <section id="state-panel" class="card" hidden>
+    <details>
+      <summary>Advanced: try a view without saving a scene</summary>
+      <p id="state-status" class="hint">Capture the current Fusion view, change things, then apply the capture again to check that it replays. Restore Previous View undoes it.</p>
+      <button id="capture-state" type="button">Capture Current View</button>
+      <button id="apply-state" type="button">Apply Captured View</button>
+    </details>
   </section>
 </main>
+<p id="project-feedback" role="status" aria-live="polite"></p>
 <script>
 (function () {
   "use strict";
@@ -117,23 +240,34 @@
     panel: document.getElementById("project-panel"),
     documentLine: document.getElementById("document-line"),
     summary: document.getElementById("project-summary"),
+    projectFileRow: document.getElementById("project-file-row"),
+    projectFile: document.getElementById("project-file"),
     setup: document.getElementById("project-setup"),
+    rememberedProject: document.getElementById("remembered-project"),
+    rememberedProjectFile: document.getElementById("remembered-project-file"),
+    reopenProject: document.getElementById("reopen-project"),
     title: document.getElementById("project-title"),
     initialize: document.getElementById("initialize-project"),
     open: document.getElementById("open-project"),
+    switchProject: document.getElementById("switch-project"),
     refresh: document.getElementById("refresh-status"),
     feedback: document.getElementById("project-feedback"),
     warnings: document.getElementById("project-warnings"),
+    scenesCard: document.getElementById("scenes-card"),
     sceneStatus: document.getElementById("scene-list-status"),
     sceneTitle: document.getElementById("scene-title"),
     createScene: document.getElementById("create-scene"),
+    sceneTools: document.getElementById("scene-tools"),
     renderAllScenes: document.getElementById("render-all-scenes"),
     previewSummary: document.getElementById("preview-summary"),
+    sceneSearch: document.getElementById("scene-search"),
     summaryPreviewPanel: document.getElementById("summary-preview-panel"),
     closeSummaryPreview: document.getElementById("close-summary-preview"),
     summaryPreviewContent: document.getElementById("summary-preview-content"),
     sceneList: document.getElementById("scene-list"),
     sceneEditor: document.getElementById("scene-editor"),
+    editorDirty: document.getElementById("editor-dirty"),
+    closeSceneEditor: document.getElementById("close-scene-editor"),
     selectedSceneFile: document.getElementById("selected-scene-file"),
     editSceneTitle: document.getElementById("edit-scene-title"),
     editSceneStatus: document.getElementById("edit-scene-status"),
@@ -149,8 +283,10 @@
     ensureIds: document.getElementById("ensure-ids"),
     repairIds: document.getElementById("repair-ids"),
     identityDetails: document.getElementById("identity-details"),
-    statePanel: document.getElementById("state-panel"), stateStatus: document.getElementById("state-status"),
-    captureState: document.getElementById("capture-state"), applyState: document.getElementById("apply-state"), restoreState: document.getElementById("restore-state")
+    statePanel: document.getElementById("state-panel"),
+    captureState: document.getElementById("capture-state"),
+    applyState: document.getElementById("apply-state"),
+    restoreState: document.getElementById("restore-state")
   };
 
   // The page's whole job during startup is to replace the connecting message,
@@ -258,9 +394,13 @@
   var nativeRepaintPending = false;
   var paintedSignature = null;
 
+  // Bumped by changes that alter what is drawn without altering any text: a
+  // thumbnail arriving, a different row being highlighted.
+  var visualRevision = 0;
+
   function contentSignature() {
     var body = document.body;
-    return body ? body.textContent : "";
+    return (body ? body.textContent : "") + "#" + visualRevision;
   }
 
   // Only ask when the visible content actually changed. A resize the user
@@ -327,6 +467,7 @@
     } else {
       handleRequestResponse(response);
     }
+    paintFeedback();
     // Every response updates the DOM (status, scene list, document line); force
     // the paint the host would otherwise skip.
     scheduleRepaint();
@@ -422,6 +563,19 @@
   // user action clears it, because by then it describes stale news.
   var retainedFeedback = "";
 
+  // Thumbnails already fetched, by scene id: { version, uri }. Project status
+  // carries only a version marker per scene, so a refresh costs no image bytes
+  // and only new or re-rendered thumbnails are fetched again.
+  var thumbnailCache = {};
+  var THUMBNAIL_BATCH = 12;
+  // A scene to open in the editor once the refresh chain behind a mutation has
+  // finished (a newly created scene, for example).
+  var selectAfterRefresh = null;
+  // The editor's field values as last loaded or saved, to detect unsaved edits.
+  var editorBaseline = null;
+  // Show the filter box only once a list is long enough to need one.
+  var SEARCH_MIN_SCENES = 6;
+
   function newRequestId() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
       var random = (Math.random() * 16) | 0;
@@ -447,20 +601,39 @@
     pendingRequest = { id: newRequestId(), onSettled: onSettled };
     setBusy(true);
     elements.feedback.textContent = busyText || "Working…";
+    paintFeedback();
     if (!transmit(action, payload, pendingRequest.id)) {
       pendingRequest = null;
       setBusy(false);
-      elements.feedback.textContent = "The add-in connection was lost. Restart the add-in and reopen the palette.";
+      elements.feedback.textContent = "Error: The add-in connection was lost. Stop and run the add-in again from Utilities > Add-Ins.";
+      paintFeedback();
     }
   }
 
+  // Every button is disabled while a request is in flight. Requests are
+  // dropped while one is pending, so a button left enabled would be a button
+  // that silently does nothing when clicked.
   function setBusy(busy) {
-    elements.initialize.disabled = busy;
-    elements.open.disabled = busy;
-    elements.refresh.disabled = busy;
-    elements.ensureIds.disabled = busy;
-    elements.repairIds.disabled = busy;
-    elements.captureState.disabled = busy; elements.applyState.disabled = busy; elements.restoreState.disabled = busy; elements.createScene.disabled = busy; elements.renderAllScenes.disabled = busy; elements.previewSummary.disabled = busy; elements.closeSummaryPreview.disabled = busy; elements.saveScene.disabled = busy; elements.updateSceneState.disabled = busy; elements.moveSceneUp.disabled = busy; elements.moveSceneDown.disabled = busy;
+    var buttons = document.getElementsByTagName("button");
+    var index;
+    for (index = 0; index < buttons.length; index += 1) { buttons[index].disabled = busy; }
+    if (!busy) { updateMoveButtons(); }
+  }
+
+  // The message bar's colour follows what it is saying. The text itself always
+  // carries the same information ("Error: …"), so colour is never the only cue.
+  function paintFeedback() {
+    var text = elements.feedback.textContent || "";
+    var kind = "";
+    if (pendingRequest !== null) { kind = "busy"; }
+    else if (text.indexOf("Error") === 0) { kind = "error"; }
+    else if (text) { kind = "success"; }
+    elements.feedback.className = kind;
+  }
+
+  function say(text) {
+    elements.feedback.textContent = text;
+    paintFeedback();
   }
 
   // ---- rendering -------------------------------------------------------
@@ -473,94 +646,180 @@
     clearChildren(elements.warnings);
     (warnings || []).forEach(function (warning) {
       var item = document.createElement("li");
-      item.textContent = "Warning (" + warning.code + "): " + warning.message;
+      item.textContent = warning.message + " (" + warning.code + ")";
       elements.warnings.appendChild(item);
     });
+  }
+
+  function sceneById(sceneId) {
+    var scenes = currentProject ? currentProject.scenes : [];
+    var index;
+    for (index = 0; index < scenes.length; index += 1) {
+      if (scenes[index].scene_id === sceneId) { return scenes[index]; }
+    }
+    return null;
+  }
+
+  function sceneLabel(entry) {
+    return entry.title || entry.file;
+  }
+
+  function sceneButton(label, tooltip, onClick, className) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.title = tooltip;
+    if (className) { button.className = className; }
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  function fillThumbnail(holder, entry) {
+    clearChildren(holder);
+    var cached = thumbnailCache[entry.scene_id];
+    if (entry.thumbnail_version && cached && cached.uri) {
+      var image = document.createElement("img");
+      image.alt = "";
+      image.src = cached.uri;
+      holder.appendChild(image);
+    } else {
+      holder.textContent = entry.thumbnail_version ? "Loading…" : "Not rendered yet";
+    }
+  }
+
+  function sceneRow(entry, position) {
+    var item = document.createElement("li");
+    item.className = "scene-row" + (entry.scene_id === selectedSceneId ? " selected" : "") + (entry.error ? " broken" : "");
+    item.setAttribute("data-scene-id", entry.scene_id);
+    item.setAttribute("data-search", (sceneLabel(entry) + " " + (entry.description || "") + " " + (entry.status || "")).toLowerCase());
+
+    var thumb = document.createElement("div");
+    thumb.className = "thumb";
+    fillThumbnail(thumb, entry);
+    item.appendChild(thumb);
+
+    var main = document.createElement("div");
+    main.className = "scene-main";
+    var head = document.createElement("div");
+    head.className = "scene-head";
+    var name = document.createElement("span");
+    name.className = "scene-name";
+    name.textContent = position + ". " + sceneLabel(entry);
+    head.appendChild(name);
+    if (!entry.error) {
+      var badge = document.createElement("span");
+      var status = entry.status || "draft";
+      badge.className = "badge status-" + status;
+      badge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+      head.appendChild(badge);
+    }
+    main.appendChild(head);
+
+    var description = document.createElement("p");
+    description.className = "scene-desc";
+    description.textContent = entry.error
+      ? "Error: " + entry.error + " Fix the file on disk and press Refresh, or delete this scene."
+      : (entry.description || "No description yet.");
+    main.appendChild(description);
+
+    var actions = document.createElement("div");
+    actions.className = "scene-actions";
+    if (!entry.error) {
+      actions.appendChild(sceneButton("Edit", "Edit this scene's title, text and order", function () { loadScene(entry.scene_id); }));
+      actions.appendChild(sceneButton("Show in Fusion", "Apply this scene's camera, visibility, opacity and positions to the open assembly", function () { loadSceneState(entry.scene_id); }));
+      actions.appendChild(sceneButton("Render", "Render this scene's final image and thumbnail, then put Fusion back as it was", function () { renderScene(entry.scene_id); }));
+      actions.appendChild(sceneButton("Duplicate", "Make a copy of this scene right after it", function () { duplicateScene(entry.scene_id); }));
+    }
+    actions.appendChild(sceneButton("Delete", "Delete this scene and its generated images", function () { deleteScene(entry.scene_id); }, "danger"));
+    main.appendChild(actions);
+    item.appendChild(main);
+    return item;
+  }
+
+  function applySceneFilter() {
+    var query = elements.sceneSearch.hidden ? "" : elements.sceneSearch.value.toLowerCase().replace(/^\s+|\s+$/g, "");
+    var rows = elements.sceneList.children;
+    var shown = 0;
+    var index;
+    for (index = 0; index < rows.length; index += 1) {
+      var match = !query || rows[index].getAttribute("data-search").indexOf(query) !== -1;
+      rows[index].hidden = !match;
+      if (match) { shown += 1; }
+    }
+    if (currentProject && currentProject.scenes.length) {
+      var total = currentProject.scenes.length;
+      elements.sceneStatus.textContent = query
+        ? "Showing " + shown + " of " + total + " scenes."
+        : total + (total === 1 ? " scene" : " scenes") + ", in manual order.";
+    }
+  }
+
+  function closeEditor() {
+    selectedSceneId = null;
+    editorBaseline = null;
+    elements.sceneEditor.hidden = true;
+    markSelectedRow();
   }
 
   function renderScenes(project) {
     clearChildren(elements.sceneList);
     if (!project) {
-      elements.createScene.hidden = true;
-      elements.renderAllScenes.hidden = true;
-      elements.previewSummary.hidden = true;
-      elements.sceneTitle.hidden = true;
-      elements.sceneList.hidden = true;
+      elements.scenesCard.hidden = true;
       elements.summaryPreviewPanel.hidden = true;
-      elements.sceneEditor.hidden = true;
       currentProject = null;
-      selectedSceneId = null;
-      elements.sceneStatus.textContent = "The scene-authoring workflow appears after project initialization.";
+      closeEditor();
       return;
     }
     currentProject = project;
+    elements.scenesCard.hidden = false;
     elements.createScene.hidden = false;
-    elements.renderAllScenes.hidden = false;
-    elements.previewSummary.hidden = false;
-    elements.sceneTitle.hidden = false;
-    if (project.scenes.length === 0) {
-      elements.sceneList.hidden = true;
-      elements.renderAllScenes.hidden = true;
-      elements.previewSummary.hidden = true;
-      elements.sceneEditor.hidden = true;
+    elements.sceneTools.hidden = false;
+    if (selectedSceneId && !sceneById(selectedSceneId)) { closeEditor(); }
+    var hasScenes = project.scenes.length > 0;
+    elements.renderAllScenes.hidden = !hasScenes;
+    elements.previewSummary.hidden = !hasScenes;
+    elements.sceneList.hidden = !hasScenes;
+    elements.sceneSearch.hidden = project.scenes.length < SEARCH_MIN_SCENES;
+    if (!hasScenes) {
       elements.summaryPreviewPanel.hidden = true;
-      selectedSceneId = null;
-      elements.sceneStatus.textContent = "No scenes yet. Capture the current Fusion state to create one.";
+      elements.sceneStatus.textContent = "No scenes yet. Arrange the Fusion view the way the picture should look, type a title above, and click Create Scene.";
       return;
     }
-    elements.sceneStatus.textContent = project.scenes.length + " scene(s) in manifest order:";
-    project.scenes.forEach(function (entry) {
-      var item = document.createElement("li");
-      item.textContent = entry.title || entry.file;
-      var actions = document.createElement("div");
-      actions.className = "scene-actions";
-      var edit = document.createElement("button");
-      edit.type = "button";
-      edit.textContent = "Edit";
-      edit.addEventListener("click", function () { loadScene(entry.scene_id); });
-      var load = document.createElement("button");
-      load.type = "button";
-      load.textContent = "Load Scene";
-      load.addEventListener("click", function () { loadSceneState(entry.scene_id); });
-      var duplicate = document.createElement("button");
-      duplicate.type = "button";
-      duplicate.textContent = "Duplicate";
-      duplicate.addEventListener("click", function () { duplicateScene(entry.scene_id); });
-      var render = document.createElement("button");
-      render.type = "button";
-      render.textContent = "Render";
-      render.addEventListener("click", function () { renderScene(entry.scene_id); });
-      var remove = document.createElement("button");
-      remove.type = "button";
-      remove.textContent = "Delete";
-      remove.addEventListener("click", function () { deleteScene(entry.scene_id); });
-      actions.appendChild(edit);
-      actions.appendChild(load);
-      actions.appendChild(render);
-      actions.appendChild(duplicate);
-      actions.appendChild(remove);
-      item.appendChild(actions);
-      elements.sceneList.appendChild(item);
+    project.scenes.forEach(function (entry, index) {
+      elements.sceneList.appendChild(sceneRow(entry, index + 1));
     });
-    elements.sceneList.hidden = false;
-    if (selectedSceneId) { updateMoveButtons(); }
+    applySceneFilter();
+    updateMoveButtons();
+  }
+
+  function markSelectedRow() {
+    var rows = elements.sceneList.children;
+    var index;
+    for (index = 0; index < rows.length; index += 1) {
+      var selected = rows[index].getAttribute("data-scene-id") === selectedSceneId;
+      rows[index].className = rows[index].className.replace(/ selected/g, "") + (selected ? " selected" : "");
+    }
+    visualRevision += 1;
   }
 
   function renderState(result) {
     elements.panel.hidden = false;
-    if (result.document) {
-      elements.documentLine.textContent = "Document: " + result.document.name;
-    } else {
-      elements.documentLine.textContent = "No document is open. Open the documentation assembly, then press Refresh.";
-    }
+    elements.documentLine.textContent = result.document
+      ? result.document.name
+      : "No document is open. Open the documentation assembly, then press Refresh.";
     if (result.project) {
-      elements.summary.textContent = "Project: " + result.project.title + " — " + result.project.root;
+      elements.summary.textContent = result.project.title;
+      elements.projectFile.textContent = result.project.file || result.project.root;
+      elements.projectFileRow.hidden = false;
       elements.setup.hidden = true;
+      elements.switchProject.hidden = false;
     } else {
-      elements.summary.textContent = result.document
-        ? "No manual project is associated with this document yet."
-        : "";
+      elements.summary.textContent = result.document ? "None linked to this document yet." : "—";
+      elements.projectFileRow.hidden = true;
       elements.setup.hidden = !result.document;
+      elements.switchProject.hidden = true;
+      elements.rememberedProject.hidden = !result.remembered_project_file;
+      elements.rememberedProjectFile.textContent = result.remembered_project_file || "";
     }
     renderWarnings(result.warnings);
     renderScenes(result.project);
@@ -578,32 +837,43 @@
     var duplicates = result.duplicates.occurrences.length + result.duplicates.components.length;
     clearChildren(elements.identityDetails);
     elements.identityPanel.hidden = false;
+    elements.repairIds.hidden = !duplicates;
     if (duplicates) {
-      elements.identityStatus.textContent = "Blocking duplicate IDs found. Repair them before scene capture, apply, or render.";
+      elements.identityStatus.textContent = "Some parts share an ID. Click Repair Duplicate IDs before creating, showing or rendering scenes.";
     } else if (missing) {
-      elements.identityStatus.textContent = "Some managed entities need IDs. Use Ensure IDs before creating a scene.";
+      elements.identityStatus.textContent = missing + " part ID(s) are missing. Click Ensure IDs before creating a scene.";
+    } else if (result.occurrences === 0) {
+      elements.identityStatus.textContent = "This document has no parts to manage yet.";
     } else {
-      elements.identityStatus.textContent = result.occurrences + " occurrence(s) and " + result.components + " component(s) have unique stable IDs.";
+      elements.identityStatus.textContent = "All good: " + result.occurrences + " occurrence(s) and " + result.components + " component(s) have unique IDs.";
     }
     result.duplicates.occurrences.forEach(function (entry) {
       var item = document.createElement("li");
-      item.textContent = "Duplicate occurrence ID: " + entry.labels.join(", ");
+      item.textContent = "Occurrences sharing one ID: " + entry.labels.join(", ");
       elements.identityDetails.appendChild(item);
     });
     result.duplicates.components.forEach(function (entry) {
       var item = document.createElement("li");
-      item.textContent = "Duplicate component ID: " + entry.labels.join(", ");
+      item.textContent = "Components sharing one ID: " + entry.labels.join(", ");
       elements.identityDetails.appendChild(item);
     });
-    if (missing) {
-      var missingItem = document.createElement("li");
-      missingItem.textContent = missing + " entity ID(s) are missing or invalid.";
-      elements.identityDetails.appendChild(missingItem);
-    }
   }
 
   function describeError(response) {
-    return "Error (" + response.error.code + "): " + response.error.message;
+    return "Error: " + response.error.message + " (" + response.error.code + ")";
+  }
+
+  // Shows a failed request's error. A failure caused by part IDs also
+  // refreshes the Part IDs panel, so the button the message points at is
+  // there and the panel agrees with the message.
+  function showError(response) {
+    var text = describeError(response);
+    var code = response.error.code || "";
+    elements.feedback.textContent = text;
+    if (code === "IDENTITY_IDS_MISSING" || code.indexOf("DUPLICATE_") === 0) {
+      retainedFeedback = text;
+      requestIdentityStatus();
+    }
   }
 
   // Callers that refresh the project behind a completed mutation pass the
@@ -635,7 +905,56 @@
         elements.identityPanel.hidden = false;
         elements.identityStatus.textContent = describeError(response);
       }
+      continueRefreshChain();
     }, "Checking stable IDs…", true);
+  }
+
+  // The tail of every refresh: fetch thumbnails the list still lacks, then
+  // open the scene a mutation asked to have selected.
+  function continueRefreshChain() {
+    if (requestMissingThumbnails()) { return; }
+    if (selectAfterRefresh) {
+      var sceneId = selectAfterRefresh;
+      selectAfterRefresh = null;
+      if (sceneById(sceneId)) { loadScene(sceneId, true); }
+    }
+  }
+
+  function requestMissingThumbnails() {
+    if (!currentProject) { return false; }
+    var wanted = [];
+    var versions = {};
+    currentProject.scenes.forEach(function (entry) {
+      var cached = thumbnailCache[entry.scene_id];
+      if (entry.thumbnail_version && (!cached || cached.version !== entry.thumbnail_version) && wanted.length < THUMBNAIL_BATCH) {
+        wanted.push(entry.scene_id);
+        versions[entry.scene_id] = entry.thumbnail_version;
+      }
+    });
+    if (!wanted.length) { return false; }
+    sendRequest("scene.thumbnails", { scene_ids: wanted }, function (response) {
+      elements.feedback.textContent = retainedFeedback;
+      var received = response.ok ? response.result.thumbnails : {};
+      // Record an answer for every scene asked about, including the ones that
+      // came back empty or failed, so a thumbnail that cannot be read is not
+      // requested again on every pass.
+      wanted.forEach(function (sceneId) {
+        var thumbnail = received[sceneId];
+        thumbnailCache[sceneId] = { version: versions[sceneId], uri: thumbnail ? thumbnail.data_uri : null };
+      });
+      var rows = elements.sceneList.children;
+      var index;
+      for (index = 0; index < rows.length; index += 1) {
+        var entry = sceneById(rows[index].getAttribute("data-scene-id"));
+        if (entry && versions[entry.scene_id]) {
+          fillThumbnail(rows[index].firstChild, entry);
+          if (!thumbnailCache[entry.scene_id].uri) { rows[index].firstChild.textContent = "No thumbnail"; }
+        }
+      }
+      visualRevision += 1;
+      continueRefreshChain();
+    }, "Loading thumbnails…", true);
+    return true;
   }
 
   function handleMutationResponse(response) {
@@ -644,10 +963,14 @@
       return;
     }
     if (response.result.cancelled) {
-      elements.feedback.textContent = "Cancelled.";
+      elements.feedback.textContent = "Cancelled. Nothing was changed.";
       return;
     }
-    elements.feedback.textContent = "";
+    // Kept across the identity check that renderState fires behind this. The
+    // reminder matters: the link lives in the Fusion document, and this add-in
+    // never saves the document for the user.
+    retainedFeedback = "Project \"" + response.result.project.title + "\" is open. Save the Fusion document to keep it linked to this project.";
+    elements.feedback.textContent = retainedFeedback;
     renderState(response.result);
   }
 
@@ -660,7 +983,7 @@
           !response.ok &&
           response.error &&
           response.error.code === "PROJECT_ALREADY_ASSOCIATED" &&
-          window.confirm("This Fusion document is already associated with a manual project, but the folder may be unavailable on this machine. Replace the association with a newly initialized project?")
+          window.confirm("This Fusion document is already linked to a manual project, but its project file may be unavailable on this computer. Replace that link with a newly created project?")
         ) {
           initializeProject(true);
           return;
@@ -671,18 +994,32 @@
     );
   }
 
+  function openProject(useRemembered) {
+    sendRequest(
+      "project.open",
+      { use_remembered: useRemembered === true },
+      handleMutationResponse,
+      useRemembered === true ? "Reopening the project…" : "Waiting for the Fusion file dialog…"
+    );
+  }
+
+  function onEnter(input, action) {
+    input.addEventListener("keydown", function (event) {
+      if (event.keyCode === 13) { event.preventDefault(); action(); }
+    });
+  }
+
   elements.initialize.addEventListener("click", function () {
     initializeProject(false);
   });
+  onEnter(elements.title, function () { initializeProject(false); });
 
-  elements.open.addEventListener("click", function () {
-    sendRequest(
-      "project.open",
-      {},
-      handleMutationResponse,
-      "Waiting for the Fusion folder dialog…"
-    );
+  elements.open.addEventListener("click", function () { openProject(false); });
+  elements.switchProject.addEventListener("click", function () {
+    if (!confirmDiscardEdits()) { return; }
+    openProject(false);
   });
+  elements.reopenProject.addEventListener("click", function () { openProject(true); });
 
   // A click carries no message to retain, and any message still on the line
   // describes an earlier action, so Refresh starts from a clean line.
@@ -691,24 +1028,57 @@
   elements.ensureIds.addEventListener("click", function () {
     sendRequest("identity.ensure_ids", {}, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "Assigned " + response.result.assigned.occurrences + " occurrence ID(s) and " + response.result.assigned.components + " component ID(s).";
+        var assigned = response.result.assigned.occurrences + response.result.assigned.components;
+        elements.feedback.textContent = assigned
+          ? "Assigned " + response.result.assigned.occurrences + " occurrence ID(s) and " + response.result.assigned.components + " component ID(s). Save the Fusion document to keep them."
+          : "Every part already has an ID. Nothing was changed.";
         renderIdentity(response.result);
       } else {
         elements.feedback.textContent = describeError(response);
       }
-    }, "Assigning stable IDs to managed entities…");
+    }, "Assigning IDs to parts…");
   });
 
   elements.repairIds.addEventListener("click", function () {
     sendRequest("identity.repair_duplicates", {}, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "Repaired " + response.result.repaired.occurrences + " occurrence ID(s) and " + response.result.repaired.components + " component ID(s). Review any existing scenes before using them.";
+        elements.feedback.textContent = "Repaired " + response.result.repaired.occurrences + " occurrence ID(s) and " + response.result.repaired.components + " component ID(s). Scenes captured before the repair may no longer find those parts; show each one in Fusion to check it.";
         renderIdentity(response.result);
       } else {
         elements.feedback.textContent = describeError(response);
       }
     }, "Repairing duplicate IDs…");
   });
+
+  // ---- scene editor ----------------------------------------------------
+
+  function editorValues() {
+    return {
+      title: elements.editSceneTitle.value,
+      status: elements.editSceneStatus.value,
+      description: elements.editSceneDescription.value,
+      purpose: elements.editScenePurpose.value,
+      instructions_markdown: elements.editSceneInstructions.value
+    };
+  }
+
+  function editorIsDirty() {
+    if (!selectedSceneId || !editorBaseline) { return false; }
+    var current = editorValues();
+    var key;
+    for (key in editorBaseline) {
+      if (editorBaseline.hasOwnProperty(key) && editorBaseline[key] !== current[key]) { return true; }
+    }
+    return false;
+  }
+
+  function updateDirtyIndicator() {
+    elements.editorDirty.hidden = !editorIsDirty();
+  }
+
+  function confirmDiscardEdits() {
+    return !editorIsDirty() || window.confirm("This scene has unsaved text changes. Discard them?");
+  }
 
   function renderSceneEditor(scene) {
     selectedSceneId = scene.scene_id;
@@ -719,6 +1089,9 @@
     elements.editSceneDescription.value = scene.description || "";
     elements.editScenePurpose.value = scene.purpose || "";
     elements.editSceneInstructions.value = scene.instructions_markdown || "";
+    editorBaseline = editorValues();
+    updateDirtyIndicator();
+    markSelectedRow();
     updateMoveButtons();
   }
 
@@ -730,56 +1103,69 @@
     elements.moveSceneDown.disabled = pendingRequest !== null || index < 0 || index >= scenes.length - 1;
   }
 
-  function loadScene(sceneId) {
+  // ``quiet`` marks the automatic open behind a mutation: it must not replace
+  // the message describing that mutation, and has nothing to scroll back from.
+  function loadScene(sceneId, quiet) {
+    if (sceneId !== selectedSceneId && !confirmDiscardEdits()) { return; }
     sendRequest("scene.get", { scene_id: sceneId }, function (response) {
-      if (response.ok) { renderSceneEditor(response.result); }
-      else { elements.feedback.textContent = describeError(response); }
-    }, "Loading scene metadata…");
+      if (response.ok) {
+        elements.feedback.textContent = quiet === true ? retainedFeedback : "";
+        renderSceneEditor(response.result);
+        if (quiet !== true && elements.sceneEditor.scrollIntoView) { elements.sceneEditor.scrollIntoView(); }
+      } else { showError(response); }
+    }, "Opening scene…", quiet === true);
   }
 
   function loadSceneState(sceneId) {
     sendRequest("scene.load", { scene_id: sceneId }, function (response) {
       if (response.ok) {
-        elements.feedback.textContent = "Loaded scene into Fusion. Use Restore Previous State to return to the prior view.";
+        elements.feedback.textContent = "Fusion now shows this scene." + describeWarnings(response.result.warnings) + " Click Restore Previous View to go back.";
       } else {
-        elements.feedback.textContent = describeError(response);
+        showError(response);
       }
-    }, "Loading saved scene state into Fusion…");
+    }, "Showing the scene in Fusion…");
+  }
+
+  // Parts added to the assembly after a scene was captured are hidden when it
+  // replays. That is correct, but invisible unless it is said out loud.
+  function describeWarnings(warnings) {
+    var hidden = 0;
+    (warnings || []).forEach(function (warning) {
+      if (warning.code === "UNLISTED_OCCURRENCE_HIDDEN") { hidden += 1; }
+    });
+    return hidden ? " " + hidden + " part(s) added since it was captured were hidden; recapture the scene to include them." : "";
   }
 
   function refreshAfterSceneMutation(response) {
     if (response.ok) {
       requestStatus("Scene list updated.");
     } else {
-      elements.feedback.textContent = describeError(response);
+      showError(response);
     }
   }
 
   function saveSelectedScene() {
     if (!selectedSceneId) { return; }
-    sendRequest("scene.update_metadata", {
-      scene_id: selectedSceneId,
-      title: elements.editSceneTitle.value,
-      status: elements.editSceneStatus.value,
-      description: elements.editSceneDescription.value,
-      purpose: elements.editScenePurpose.value,
-      instructions_markdown: elements.editSceneInstructions.value
-    }, function (response) {
+    var saved = editorValues();
+    saved.scene_id = selectedSceneId;
+    sendRequest("scene.update_metadata", saved, function (response) {
       if (response.ok) {
+        editorBaseline = editorValues();
+        updateDirtyIndicator();
         requestStatus("Scene metadata saved.");
-      } else { elements.feedback.textContent = describeError(response); }
-    }, "Saving scene metadata…");
+      } else { showError(response); }
+    }, "Saving scene text…");
   }
 
 
   function updateSelectedSceneState() {
     if (!selectedSceneId) { return; }
-    if (!window.confirm("Replace this scene's saved camera, visibility, transforms, and opacity with the current Fusion view/state? Metadata and output file names will stay the same.")) { return; }
+    if (!window.confirm("Replace this scene's saved camera, visibility, positions and opacity with what Fusion shows right now? The scene's text and file names stay the same. Render it again afterwards to update its image.")) { return; }
     sendRequest("scene.update_state", { scene_id: selectedSceneId }, function (response) {
       if (response.ok) {
-        requestStatus("Scene graphics updated from current Fusion state.");
-      } else { elements.feedback.textContent = describeError(response); }
-    }, "Updating scene graphics from current Fusion state…");
+        requestStatus("Scene graphics updated from current Fusion state." + " Render it again to update its image.");
+      } else { showError(response); }
+    }, "Recapturing the scene from the current Fusion view…");
   }
 
   function moveSelectedScene(delta) {
@@ -793,48 +1179,83 @@
     order.splice(target, 0, moved);
     sendRequest("scene.reorder", { scene_ids: order }, function (response) {
       if (response.ok) { requestStatus("Scene order updated."); }
-      else { elements.feedback.textContent = describeError(response); }
+      else { showError(response); }
     }, "Updating scene order…");
   }
 
   function renderScene(sceneId) {
     sendRequest("scene.render", { scene_id: sceneId }, function (response) {
       if (response.ok) {
-        requestStatus("Rendered " + response.result.image_file + " and " + response.result.thumbnail_file + ".");
+        requestStatus("Rendered " + response.result.image_file + " and " + response.result.thumbnail_file + "." + describeWarnings(response.result.warnings));
       } else {
-        elements.feedback.textContent = describeError(response);
+        showError(response);
       }
-    }, "Applying, exporting, and restoring scene…");
+    }, "Rendering: applying the scene, exporting images, then restoring your view…");
   }
 
   function showSummaryPreview(html) {
     elements.summaryPreviewPanel.hidden = false;
     elements.summaryPreviewContent.innerHTML = html;
+    if (elements.summaryPreviewPanel.scrollIntoView) { elements.summaryPreviewPanel.scrollIntoView(); }
   }
 
   function previewSummary() {
     sendRequest("preview.summary", {}, function (response) {
       if (response.ok) {
         showSummaryPreview(response.result.body_html);
-        elements.feedback.textContent = "Preview updated for " + response.result.title + ".";
+        elements.feedback.textContent = "Preview of \"" + response.result.title + "\" updated.";
       } else {
-        elements.feedback.textContent = describeError(response);
+        showError(response);
       }
-    }, "Building scene summary preview…");
+    }, "Building the manual preview…");
   }
 
   function renderAllScenes() {
+    var total = currentProject ? currentProject.scenes.length : 0;
+    if (total > 1 && !window.confirm("Render all " + total + " scenes now? Fusion will step through each one and may be busy for a while.")) { return; }
     sendRequest("scene.render_all", {}, function (response) {
       if (response.ok) {
         requestStatus("Rendered " + response.result.count + " scene(s).");
       } else {
-        elements.feedback.textContent = describeError(response);
+        // A failure part-way through still leaves the earlier scenes rendered,
+        // so refresh to show their new thumbnails alongside the error.
+        requestStatus(describeError(response));
       }
-    }, "Rendering all scenes in manifest order…");
+    }, "Rendering every scene in manual order. This can take a while…");
   }
 
   function duplicateScene(sceneId) {
     sendRequest("scene.duplicate", { scene_id: sceneId }, refreshAfterSceneMutation, "Duplicating scene…");
+  }
+
+  function deleteScene(sceneId) {
+    var entry = sceneById(sceneId);
+    var name = entry ? sceneLabel(entry) : "this scene";
+    if (!window.confirm("Delete \"" + name + "\" and its generated image files? This cannot be undone.")) { return; }
+    sendRequest("scene.delete", { scene_id: sceneId }, function (response) {
+      if (response.ok) { delete thumbnailCache[sceneId]; }
+      refreshAfterSceneMutation(response);
+    }, "Deleting scene…");
+  }
+
+  function createScene() {
+    var title = elements.sceneTitle.value.replace(/^\s+|\s+$/g, "");
+    if (!title) {
+      say("Error: Type a title for the new scene first.");
+      elements.sceneTitle.focus();
+      return;
+    }
+    sendRequest("scene.create_from_current", { title: title }, function (response) {
+      if (response.ok) {
+        elements.sceneTitle.value = "";
+        // Open the new scene for editing once the list has refreshed, unless
+        // that would throw away text the user is still typing elsewhere.
+        if (!editorIsDirty()) { selectAfterRefresh = response.result.scene.scene_id; }
+        requestStatus("Scene \"" + title + "\" created. Add its text below, then click Render to make its image.");
+      } else {
+        showError(response);
+      }
+    }, "Capturing the current Fusion view into a new scene…");
   }
 
   elements.saveScene.addEventListener("click", saveSelectedScene);
@@ -842,28 +1263,39 @@
   elements.renderAllScenes.addEventListener("click", renderAllScenes);
   elements.previewSummary.addEventListener("click", previewSummary);
   elements.closeSummaryPreview.addEventListener("click", function () { elements.summaryPreviewPanel.hidden = true; });
+  elements.closeSceneEditor.addEventListener("click", function () {
+    if (confirmDiscardEdits()) { closeEditor(); }
+  });
   elements.moveSceneUp.addEventListener("click", function () { moveSelectedScene(-1); });
   elements.moveSceneDown.addEventListener("click", function () { moveSelectedScene(1); });
-
-  function deleteScene(sceneId) {
-    if (!window.confirm("Delete this scene and its generated image files?")) { return; }
-    sendRequest("scene.delete", { scene_id: sceneId }, refreshAfterSceneMutation, "Deleting scene…");
-  }
-
-  elements.createScene.addEventListener("click", function () {
-    sendRequest("scene.create_from_current", { title: elements.sceneTitle.value }, refreshAfterSceneMutation, "Capturing current Fusion state into a scene file…");
+  elements.createScene.addEventListener("click", createScene);
+  onEnter(elements.sceneTitle, createScene);
+  elements.sceneSearch.addEventListener("input", function () {
+    applySceneFilter();
+    scheduleRepaint();
+  });
+  [elements.editSceneTitle, elements.editSceneStatus, elements.editSceneDescription, elements.editScenePurpose, elements.editSceneInstructions].forEach(function (field) {
+    field.addEventListener("input", updateDirtyIndicator);
+    field.addEventListener("change", updateDirtyIndicator);
   });
 
   function stateRequest(action, text) {
     sendRequest(action, {}, function (response) {
-      if (response.ok) {
-        elements.stateStatus.textContent = action === "state.restore" ? (response.result.restored ? "Previous state restored." : "No applied state to restore.") : "Captured state contains " + response.result.occurrences + " occurrence(s) and " + response.result.components + " component(s).";
-      } else { elements.stateStatus.textContent = describeError(response); }
+      if (!response.ok) { showError(response); return; }
+      if (action === "state.restore") {
+        elements.feedback.textContent = response.result.restored
+          ? "Fusion is back to the view you had before."
+          : "Nothing to restore: no scene is being shown right now.";
+      } else if (action === "state.capture_current") {
+        elements.feedback.textContent = "Captured the current view: " + response.result.occurrences + " occurrence(s) and " + response.result.components + " component(s).";
+      } else {
+        elements.feedback.textContent = "Captured view applied." + describeWarnings(response.result.warnings) + " Click Restore Previous View to go back.";
+      }
     }, text);
   }
-  elements.captureState.addEventListener("click", function () { stateRequest("state.capture_current", "Capturing current Fusion state…"); });
-  elements.applyState.addEventListener("click", function () { stateRequest("state.apply_captured", "Applying captured state…"); });
-  elements.restoreState.addEventListener("click", function () { stateRequest("state.restore", "Restoring previous Fusion state…"); });
+  elements.captureState.addEventListener("click", function () { stateRequest("state.capture_current", "Capturing the current Fusion view…"); });
+  elements.applyState.addEventListener("click", function () { stateRequest("state.apply_captured", "Applying the captured view…"); });
+  elements.restoreState.addEventListener("click", function () { stateRequest("state.restore", "Restoring your previous Fusion view…"); });
 
   // ---- startup ---------------------------------------------------------
 

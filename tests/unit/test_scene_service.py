@@ -252,3 +252,105 @@ def test_load_applies_persisted_scene_through_state_guard(tmp_path):
     assert result["scene"]["scene_id"] == scene_id
     assert result["warnings"] == [{"code": "UNLISTED_OCCURRENCE_HIDDEN", "label": "extra"}]
     assert state_service.applied[0]["scene"]["id"] == scene_id
+
+
+def test_reorder_rejects_a_malformed_order_with_its_own_code(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    first = service.create_from_current({"title": "First"})["scene"]["scene_id"]
+
+    # Sorting a list of mixed types raises; that used to escape as INTERNAL_ERROR.
+    for order in ([first, 7], [{"scene_id": first}], "not-a-list", None):
+        with pytest.raises(ServiceError) as error:
+            service.reorder({"scene_ids": order})
+        assert error.value.code == "SCENE_REORDER_INVALID"
+
+
+def test_delete_removes_a_scene_whose_file_is_broken(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    keep = service.create_from_current({"title": "Keep"})["scene"]
+    broken = service.create_from_current({"title": "Broken"})["scene"]
+    (root / broken["file"]).write_text("scene: [unterminated\n", encoding="utf-8")
+
+    # Deleting is how the user clears a broken scene out of the list, so it
+    # must not require the scene to load first.
+    service.delete({"scene_id": broken["scene_id"]})
+
+    remaining = yaml_store.load(root / "manual.yaml")["project"]["scenes"]
+    assert [entry["scene_id"] for entry in remaining] == [keep["scene_id"]]
+    assert not (root / broken["file"]).exists()
+
+
+def test_delete_keeps_the_scene_file_when_the_manifest_cannot_be_written(tmp_path, monkeypatch):
+    service, root, fusion = _service(tmp_path)
+    scene = service.create_from_current({"title": "Survivor"})["scene"]
+
+    def failing_write(*args):
+        raise OSError("disk full")
+    monkeypatch.setattr(yaml_store, "write", failing_write)
+
+    with pytest.raises(ServiceError) as error:
+        service.delete({"scene_id": scene["scene_id"]})
+
+    # The manifest still lists the scene, so its file must still be there.
+    assert error.value.code == "PROJECT_WRITE_FAILED"
+    assert (root / scene["file"]).is_file()
+
+
+def test_create_leaves_no_orphan_scene_file_when_the_manifest_write_fails(tmp_path, monkeypatch):
+    service, root, fusion = _service(tmp_path)
+    real_write = yaml_store.write
+
+    def manifest_fails(write_root, relative, data):
+        if relative == "manual.yaml":
+            raise OSError("disk full")
+        return real_write(write_root, relative, data)
+    monkeypatch.setattr(yaml_store, "write", manifest_fails)
+
+    with pytest.raises(ServiceError):
+        service.create_from_current({"title": "Orphan"})
+
+    assert list((root / "scenes").iterdir()) == []
+
+
+def test_a_corrupt_manifest_is_reported_with_a_stable_code(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    (root / "manual.yaml").write_text("project: [unterminated\n", encoding="utf-8")
+
+    with pytest.raises(ServiceError) as error:
+        service.list({})
+
+    assert error.value.code == "YAML_PARSE_FAILED"
+    assert not error.value.message.startswith("YAML_PARSE_FAILED")
+
+
+def test_scene_actions_refuse_a_manifest_that_belongs_to_another_project(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    yaml_store.write(root, "manual.yaml", new_manifest("99999999-9999-4999-8999-999999999999", "Other", "Assembly", "urn:doc"))
+
+    with pytest.raises(ServiceError) as error:
+        service.create_from_current({"title": "Wrong project"})
+
+    assert error.value.code == "PROJECT_ID_MISMATCH"
+
+
+def test_thumbnails_returns_only_requested_scenes_that_have_one(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    rendered = service.create_from_current({"title": "Rendered"})["scene"]
+    pending = service.create_from_current({"title": "Pending"})["scene"]
+    other = service.create_from_current({"title": "Not asked for"})["scene"]
+    yaml_store.project_path(root, rendered["output"]["thumbnail_file"]).write_bytes(b"fake png")
+    yaml_store.project_path(root, other["output"]["thumbnail_file"]).write_bytes(b"other png")
+
+    result = service.thumbnails({"scene_ids": [rendered["scene_id"], pending["scene_id"]]})["thumbnails"]
+
+    assert sorted(result) == sorted([rendered["scene_id"], pending["scene_id"]])
+    assert result[rendered["scene_id"]]["data_uri"] == "data:image/png;base64,ZmFrZSBwbmc="
+    assert result[rendered["scene_id"]]["version"]
+    assert result[pending["scene_id"]] is None
+
+
+def test_thumbnails_rejects_a_malformed_request(tmp_path):
+    service, root, fusion = _service(tmp_path)
+    with pytest.raises(ServiceError) as error:
+        service.thumbnails({"scene_ids": "all"})
+    assert error.value.code == "INVALID_PALETTE_REQUEST"

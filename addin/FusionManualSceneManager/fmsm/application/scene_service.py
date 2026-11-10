@@ -1,20 +1,21 @@
 """Scene CRUD use cases for persisted manual projects."""
 from __future__ import absolute_import
 
+import base64
 import copy
 import time
 import uuid
-from pathlib import Path
 
+from fmsm.application import project_access
 from fmsm.application.errors import ServiceError
 from fmsm.application.identity_service import require_capturable_ids
-from fmsm.application.services import MANIFEST_FILE
 from fmsm.domain.filenames import scene_basename
 from fmsm.domain.models import RENDER_DEFAULTS
-from fmsm.domain.validation import validate_manifest, validate_scene
-from fmsm.infrastructure import yaml_store
 
 _SCENE_STATUSES = frozenset(["draft", "review", "approved", "obsolete"])
+# Thumbnails are small by construction; anything larger is not one of ours and
+# is not worth pushing through the palette bridge.
+_MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
 _METADATA_FIELDS = frozenset(["title", "description", "purpose", "instructions_markdown", "status", "tags"])
 
 
@@ -37,6 +38,7 @@ class SceneService(object):
             "scene.duplicate": self.duplicate,
             "scene.delete": self.delete,
             "scene.reorder": self.reorder,
+            "scene.thumbnails": self.thumbnails,
         }
 
     def list(self, payload):
@@ -75,14 +77,14 @@ class SceneService(object):
         scene_id = str(uuid.uuid4())
         basename = scene_basename(title, scene_id)
         relative = "scenes/%s.yaml" % basename
-        if yaml_store.project_path(root, relative).exists():
+        if project_access.safe_path(root, relative).exists():
             raise ServiceError("SCENE_FILE_EXISTS", "The generated scene file already exists.")
         require_capturable_ids(self._fusion)
         state = self._fusion.capture_scene_state()
         scene = self._new_scene(scene_id, basename, title, payload, state, manifest)
         self._write_scene(root, relative, scene)
         manifest["project"]["scenes"].append({"scene_id": scene_id, "file": relative})
-        self._write_manifest(root, manifest)
+        self._write_manifest_or_discard(root, manifest, relative)
         return {"scene": self._scene_summary(root, manifest["project"]["scenes"][-1])}
 
     def update_metadata(self, payload):
@@ -124,53 +126,85 @@ class SceneService(object):
         self._write_scene(root, relative, duplicate)
         index = manifest["project"]["scenes"].index(source_entry) + 1
         manifest["project"]["scenes"].insert(index, {"scene_id": scene_id, "file": relative})
-        self._write_manifest(root, manifest)
+        self._write_manifest_or_discard(root, manifest, relative)
         return {"scene": self._scene_summary(root, manifest["project"]["scenes"][index])}
 
     def delete(self, payload):
         root, manifest = self._require_project()
         entry = self._entry(manifest, payload.get("scene_id"))
-        scene = self._load_valid_scene(root, entry["file"])
-        warnings = []
-        for relative in (entry["file"], scene.get("output", {}).get("image_file"), scene.get("output", {}).get("thumbnail_file")):
-            if not relative:
-                continue
-            path = yaml_store.project_path(root, relative)
-            if path.exists():
-                path.unlink()
-            elif relative != entry["file"]:
-                warnings.append({"code": "SCENE_ASSET_MISSING", "message": "%s was already missing." % relative})
+        # A scene whose YAML is broken or already gone must still be removable;
+        # deleting it is how the user repairs the list. Its generated images
+        # cannot be located without the YAML, so only the entry and file go.
+        try:
+            output = self._load_valid_scene(root, entry["file"]).get("output", {})
+        except ServiceError:
+            output = {}
+        # Manifest first. If the files went first and the manifest write then
+        # failed, the manifest would keep listing a scene with no file behind it.
         manifest["project"]["scenes"].remove(entry)
         self._write_manifest(root, manifest)
+        warnings = []
+        for relative in (entry["file"], output.get("image_file"), output.get("thumbnail_file")):
+            if not relative:
+                continue
+            path = project_access.safe_path(root, relative)
+            try:
+                if path.exists():
+                    path.unlink()
+            except OSError as error:
+                warnings.append({"code": "SCENE_FILE_NOT_DELETED", "message": "%s could not be deleted: %s" % (relative, error)})
         return {"deleted": payload.get("scene_id"), "warnings": warnings, "scenes": [dict(item) for item in manifest["project"]["scenes"]]}
 
     def reorder(self, payload):
         root, manifest = self._require_project()
         order = payload.get("scene_ids")
         current = [entry["scene_id"] for entry in manifest["project"]["scenes"]]
-        if sorted(order or []) != sorted(current):
+        # Check the shape before sorting: sorting a list of mixed types raises.
+        if (
+            not isinstance(order, list)
+            or not all(isinstance(scene_id, str) for scene_id in order)
+            or sorted(order) != sorted(current)
+        ):
             raise ServiceError("SCENE_REORDER_INVALID", "Reorder must include each scene ID exactly once.")
         by_id = dict((entry["scene_id"], entry) for entry in manifest["project"]["scenes"])
         manifest["project"]["scenes"] = [by_id[scene_id] for scene_id in order]
         self._write_manifest(root, manifest)
         return {"scenes": [dict(item) for item in manifest["project"]["scenes"]]}
 
+    def thumbnails(self, payload):
+        """Return thumbnail images for the requested scenes as data URIs.
+
+        The scene list shows thumbnails, but the palette page cannot read
+        project files itself and the status response deliberately carries no
+        image bytes. The page asks here for just the scenes whose thumbnail is
+        new or changed, judged by the ``thumbnail_version`` in project status.
+        A scene with no usable thumbnail maps to ``None``.
+        """
+        root, manifest = self._require_project()
+        wanted = payload.get("scene_ids")
+        if not isinstance(wanted, list) or not all(isinstance(scene_id, str) for scene_id in wanted):
+            raise ServiceError("INVALID_PALETTE_REQUEST", "scene_ids must be a list of scene IDs.")
+        wanted = set(wanted)
+        thumbnails = {}
+        for entry in manifest["project"]["scenes"]:
+            if entry["scene_id"] in wanted:
+                thumbnails[entry["scene_id"]] = self._thumbnail(root, entry)
+        return {"thumbnails": thumbnails}
+
+    def _thumbnail(self, root, entry):
+        try:
+            scene = self._load_valid_scene(root, entry["file"])
+            path = project_access.safe_path(root, scene["output"]["thumbnail_file"])
+            version = project_access.file_version(path)
+            if version is None or path.stat().st_size > _MAX_THUMBNAIL_BYTES:
+                return None
+            data = base64.b64encode(path.read_bytes()).decode("ascii")
+        except (ServiceError, OSError):
+            return None
+        return {"version": version, "data_uri": "data:image/png;base64," + data}
+
     def _require_project(self):
-        document = self._fusion.active_document()
-        if document is None:
-            raise ServiceError("NO_ACTIVE_FUSION_DESIGN", "Open the documentation assembly before working with scenes.")
-        project_id = self._fusion.read_project_id()
-        if project_id is None:
-            raise ServiceError("PROJECT_NOT_OPEN", "Initialize or open a manual project before working with scenes.")
-        root = self._settings.project_root(project_id)
-        if root is None or not (Path(root) / MANIFEST_FILE).is_file():
-            raise ServiceError("PROJECT_ROOT_UNRESOLVED", "Open the manual project folder before working with scenes.")
-        manifest = yaml_store.load(Path(root) / MANIFEST_FILE)
-        issues = validate_manifest(manifest)
-        if issues:
-            first = issues[0]
-            raise ServiceError(first.code, first.message)
-        return root, manifest
+        return project_access.require_project(self._fusion, self._settings, "working with scenes")
 
     def _entry(self, manifest, scene_id):
         for entry in manifest["project"]["scenes"]:
@@ -179,29 +213,28 @@ class SceneService(object):
         raise ServiceError("SCENE_NOT_FOUND", "The requested scene is not in the manifest.")
 
     def _load_valid_scene(self, root, relative):
-        try:
-            scene = yaml_store.load(yaml_store.project_path(root, relative))
-        except yaml_store.StoreError as error:
-            raise ServiceError("YAML_PARSE_FAILED", str(error))
-        issues = validate_scene(scene)
-        if issues:
-            first = issues[0]
-            raise ServiceError(first.code, first.message)
-        return scene
+        return project_access.load_scene(root, relative)
 
     def _write_manifest(self, root, manifest):
-        issues = validate_manifest(manifest)
-        if issues:
-            first = issues[0]
-            raise ServiceError(first.code, first.message)
-        yaml_store.write(root, MANIFEST_FILE, manifest)
+        project_access.write_manifest(root, manifest)
+
+    def _write_manifest_or_discard(self, root, manifest, new_scene_file):
+        """Write the manifest; on failure remove the scene file just created.
+
+        A scene file the manifest does not list is invisible to the palette and
+        would otherwise sit in the project folder forever.
+        """
+        try:
+            self._write_manifest(root, manifest)
+        except ServiceError:
+            try:
+                project_access.safe_path(root, new_scene_file).unlink()
+            except (ServiceError, OSError):
+                pass
+            raise
 
     def _write_scene(self, root, relative, scene):
-        issues = validate_scene(scene)
-        if issues:
-            first = issues[0]
-            raise ServiceError(first.code, first.message)
-        yaml_store.write(root, relative, scene)
+        project_access.write_scene(root, relative, scene)
 
     def _scene_summary(self, root, entry):
         scene = self._load_valid_scene(root, entry["file"])

@@ -21,7 +21,7 @@ Prepare dedicated documentation assemblies. Do not use a production master assem
 3. Confirm the palette reaches `Add-in connected.`.
 4. Initialize a project in an empty Git working tree.
 5. Press **Ensure IDs**.
-6. Press **Refresh** and confirm the Stable IDs section reports unique occurrence and component IDs.
+6. Press **Refresh** and confirm the Part IDs section reports unique occurrence and component IDs.
 7. Stop and rerun the add-in; the project should reopen without reselecting its root.
 
 Expected result: `manual.yaml`, `scenes/`, `assets/generated/`, and `assets/thumbnails/` exist; the active Fusion document has the project association; no absolute path is written to repository YAML.
@@ -32,7 +32,7 @@ Expected result: `manual.yaml`, `scenes/`, `assets/generated/`, and `assets/thum
 2. Hide one occurrence, lower one component opacity, and move one managed occurrence.
 3. Enter a scene title and press **Create Scene from Current State**.
 4. Select **Edit** for the new scene.
-5. Update title, status, description, purpose, and Markdown instructions; press **Save Metadata**.
+5. Update title, status, description, purpose, and Markdown instructions; press **Save Text**.
 6. Create a second scene and use **Move Up** / **Move Down**.
 7. Press **Duplicate** on one scene.
 8. Press **Delete** on the duplicate.
@@ -62,7 +62,7 @@ Expected result: successful render writes stable final and thumbnail PNG filenam
 ## 6. Validation gate
 
 1. Open Fixture D and render/apply a scene that references the removed occurrence.
-2. Open Fixture E and press **Stable IDs > Repair Duplicate IDs** only after first confirming duplicate diagnostics.
+2. Open Fixture E and press **Part IDs > Repair Duplicate IDs** only after first confirming duplicate diagnostics.
 3. Re-run scene render/apply after duplicate repair.
 
 Expected result: broken references and duplicate IDs block mutation before any partial apply. Repairing duplicate IDs is explicit and visible to the user.

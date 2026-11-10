@@ -1,12 +1,8 @@
 """Guarded scene rendering use cases."""
 from __future__ import absolute_import
 
-from pathlib import Path
-
+from fmsm.application import project_access
 from fmsm.application.errors import ServiceError
-from fmsm.application.services import MANIFEST_FILE
-from fmsm.domain.validation import validate_manifest, validate_scene
-from fmsm.infrastructure import yaml_store
 
 
 class RenderService(object):
@@ -43,10 +39,13 @@ class RenderService(object):
             first = issues[0]
             raise ServiceError(first["code"], first["message"], {"issues": issues, "scene_id": entry["scene_id"]})
         output = scene.get("output") or {}
-        final_path = yaml_store.project_path(root, output.get("image_file"))
-        thumbnail_path = yaml_store.project_path(root, output.get("thumbnail_file"))
-        final_path.parent.mkdir(parents=True, exist_ok=True)
-        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        final_path = project_access.safe_path(root, output.get("image_file"))
+        thumbnail_path = project_access.safe_path(root, output.get("thumbnail_file"))
+        try:
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+            thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise ServiceError("RENDER_FAILED", "Could not create the output folder: %s" % error)
         snapshot = self._fusion.capture_session_state(records)
         apply_result = None
         try:
@@ -90,21 +89,7 @@ class RenderService(object):
             )
 
     def _require_project(self):
-        document = self._fusion.active_document()
-        if document is None:
-            raise ServiceError("NO_ACTIVE_FUSION_DESIGN", "Open the documentation assembly before rendering scenes.")
-        project_id = self._fusion.read_project_id()
-        if project_id is None:
-            raise ServiceError("PROJECT_NOT_OPEN", "Initialize or open a manual project before rendering scenes.")
-        root = self._settings.project_root(project_id)
-        if root is None or not (Path(root) / MANIFEST_FILE).is_file():
-            raise ServiceError("PROJECT_ROOT_UNRESOLVED", "Open the manual project folder before rendering scenes.")
-        manifest = yaml_store.load(Path(root) / MANIFEST_FILE)
-        issues = validate_manifest(manifest)
-        if issues:
-            first = issues[0]
-            raise ServiceError(first.code, first.message)
-        return root, manifest
+        return project_access.require_project(self._fusion, self._settings, "rendering scenes")
 
     def _entry(self, manifest, scene_id):
         for entry in manifest["project"]["scenes"]:
@@ -113,9 +98,4 @@ class RenderService(object):
         raise ServiceError("SCENE_NOT_FOUND", "The requested scene is not in the manifest.")
 
     def _load_valid_scene(self, root, relative):
-        scene = yaml_store.load(yaml_store.project_path(root, relative))
-        issues = validate_scene(scene)
-        if issues:
-            first = issues[0]
-            raise ServiceError(first.code, first.message)
-        return scene
+        return project_access.load_scene(root, relative)
